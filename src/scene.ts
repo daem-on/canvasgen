@@ -110,8 +110,7 @@ const renderCircles = paintAll(animationStaggered([
 			})),
 	),
 ]))
-	.extendClamping(new Duration(60))
-	.delayClamping(new Duration(60));
+	.extend({ before: new Duration(60), after: new Duration(60) });
 
 export const renderRectAndCircle = animationSequence([
 	renderRect,

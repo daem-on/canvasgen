@@ -79,12 +79,8 @@ export abstract class Animation<T> {
 		return new CallbackAnimation(this.duration, this.strategy, (time) => callback(this.at(time)));
 	}
 
-	delayClamping(by: Duration): Animation<T> {
-		return new CallbackAnimation(this.duration.add(by), clampTime, (time) => this.at(time.subtract(by)));
-	}
-
-	extendClamping(by: Duration): Animation<T> {
-		return new CallbackAnimation(this.duration.add(by), clampTime, (time) => this.at(time));
+	extend(padding: { before: Duration; after: Duration }): Animation<T> {
+		return new CallbackAnimation(this.duration.add(padding.before).add(padding.after), this.strategy, (time) => this.at(time.subtract(padding.before)));
 	}
 }
 
