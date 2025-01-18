@@ -4,7 +4,7 @@ export type PaintingContext = {
 	canvasHeight: number;
 };
 
-export type Painter = (context: PaintingContext, time: Duration) => undefined;
+export type Painter = (context: PaintingContext) => undefined;
 
 export class Duration {
 	constructor(public readonly frame: number) { }
@@ -44,12 +44,8 @@ export type Animatable<T> = (time: Duration) => T;
 
 export type TimeTransform = (time: Duration) => Duration;
 
-export function createPainter(f: Painter): Painter {
-	return f;
-};
-
-export function transformTimeWith(painter: Painter, transform: TimeTransform): Painter {
-	return createPainter((context, time) => painter(context, transform(time)));
+export function transformTimeWith<T>(target: Animatable<T>, transform: TimeTransform): Animatable<T> {
+	return (time) => target(transform(time));
 }
 
 export function lerp(from: number, to: number, animation: number) {
@@ -76,6 +72,10 @@ export function fromTweenProperties<T extends object>(source: { [k in keyof T]: 
 	};
 }
 
+export function fromTweenArray<T>(source: Animatable<T>[]): Animatable<T[]> {
+	return (time) => source.map(tween => tween(time));
+}
+
 export function timedSequentialTweens<T>(tweens: [Animatable<T>, Duration][]): Animatable<T> {
 	return (time) => {
 		let nextStart = Duration.zero;
@@ -90,23 +90,12 @@ export function timedSequentialTweens<T>(tweens: [Animatable<T>, Duration][]): A
 	};
 }
 
-export function parallel(painters: Painter[]): Painter {
-	return createPainter((context, time) => {
-		for (const p of painters) p(context, time);
-	});
-}
-
-export function timedSequential(painters: [Painter, Duration][]): Painter {
-	return createPainter((context, time) => {
-		let nextStart = Duration.zero;
-		for (const [painter, duration] of painters) {
-			nextStart = nextStart.add(duration);
-			if (time.isLessThan(nextStart)) {
-				painter(context, time.subtract(nextStart.subtract(duration)));
-				break;
-			}
+export function parallel(painters: Animatable<Painter[]>): Animatable<Painter> {
+	return (time) => (context) => {
+		for (const painter of painters(time)) {
+			painter(context);
 		}
-	});
+	};
 }
 
 export function windowBetween(from: Duration, to: Duration): TimeTransform {

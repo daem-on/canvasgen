@@ -1,10 +1,10 @@
 import { easings } from "./lib/easings";
-import { Animatable, constant, createSequenceWindows, createPainter, Duration, numberTween, parallel, timedSequential, transformTimeWith, fromTweenProperties, Painter, timedSequentialTweens } from "./lib/render";
+import { Animatable, constant, createSequenceWindows, Duration, numberTween, parallel, fromTweenProperties, Painter, timedSequentialTweens, fromTweenArray, transformTimeWith } from "./lib/render";
 
 type Point = { x: number, y: number; };
 
-function createCirclePainterWithAnim(settings: { position: Animatable<Point>, radius: Animatable<number>; fillStyle: Animatable<string>; }): Painter {
-	return createPainter((context, time) => {
+function createCirclePainterWithAnim(settings: { position: Animatable<Point>, radius: Animatable<number>; fillStyle: Animatable<string>; }): Animatable<Painter> {
+	return (time) => ((context) => {
 		const x = settings.position(time).x;
 		const y = settings.position(time).y;
 		context.canvasContext.beginPath();
@@ -15,8 +15,8 @@ function createCirclePainterWithAnim(settings: { position: Animatable<Point>, ra
 	});
 }
 
-function createColoredRectPainter(settings: { color: Animatable<string>; }): Painter {
-	return createPainter((context, time) => {
+function createColoredRectPainter(settings: { color: Animatable<string>; }): Animatable<Painter> {
+	return (time) => ((context) => {
 		context.canvasContext.fillStyle = settings.color(time);
 		context.canvasContext.fillRect(0, 0, context.canvasWidth, 20);
 	});
@@ -33,7 +33,7 @@ const renderRect = createColoredRectPainter({
 
 const circlesSequence = createSequenceWindows([new Duration(20), new Duration(60), new Duration(60)]);
 
-const renderCircles = parallel([
+const renderCircles = parallel(fromTweenArray([
 	transformTimeWith(
 		createCirclePainterWithAnim({
 			position: fromTweenProperties({
@@ -59,9 +59,9 @@ const renderCircles = parallel([
 		}),
 		circlesSequence[2],
 	),
-]);
+]));
 
-export const renderRectAndCircle = timedSequential([
+export const renderRectAndCircle = timedSequentialTweens([
 	[renderRect, new Duration(120)],
 	[renderCircles, new Duration(200)],
 ]);
