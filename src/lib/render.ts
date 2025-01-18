@@ -50,58 +50,59 @@ export class Duration {
 
 export type Animatable<T> = (time: Duration) => T;
 
+type TimeTransform = (time: Duration) => Duration;
+
+type TimeTransformStrategy = (animation: Animation<any>) => TimeTransform;
+
+export const delegateTime: TimeTransformStrategy = () => (time) => time;
+
+export const clampTime: TimeTransformStrategy = (animation) => (time) => time.clamp(Duration.zero, animation.duration);
+
+export const wrapTime: TimeTransformStrategy = (animation) => (time) => time.wrap(animation.duration);
+
+export const assertTime: TimeTransformStrategy = (animation) => (time) => {
+	if (time.isLessThan(Duration.zero) || time.isGreaterThan(animation.duration)) {
+		throw new Error(`Time ${time.frame} is out of bounds [0, ${animation.duration.frame}]`);
+	}
+	return time;
+};
+
 export abstract class Animation<T> {
-	constructor(public readonly duration: Duration) { }
+	constructor(
+		public readonly duration: Duration,
+		public readonly strategy: TimeTransformStrategy
+	) { }
 
 	abstract at(time: Duration): T;
 
 	derive<U>(callback: (value: T) => U): Animation<U> {
-		return new DelegatingCallbackAnimation(this.duration, (time) => callback(this.at(time)));
+		return new CallbackAnimation(this.duration, this.strategy, (time) => callback(this.at(time)));
 	}
 
 	delayClamping(by: Duration): Animation<T> {
-		return new ClampingCallbackAnimation(this.duration.add(by), (time) => this.at(time.subtract(by)));
+		return new CallbackAnimation(this.duration.add(by), clampTime, (time) => this.at(time.subtract(by)));
 	}
 
 	extendClamping(by: Duration): Animation<T> {
-		return new ClampingCallbackAnimation(this.duration.add(by), (time) => this.at(time));
+		return new CallbackAnimation(this.duration.add(by), clampTime, (time) => this.at(time));
 	}
 }
 
-export class DelegatingCallbackAnimation<T> extends Animation<T> {
-	constructor(duration: Duration, private readonly callback: Animatable<T>) {
-		super(duration);
+export class CallbackAnimation<T> extends Animation<T> {
+	private transform = this.strategy(this);
+	
+	constructor(duration: Duration, strategy: TimeTransformStrategy, private readonly callback: Animatable<T>) {
+		super(duration, strategy);
 	}
 
 	at(time: Duration): T {
-		return this.callback(time);
-	}
-}
-
-export class ThrowingCallbackAnimation<T> extends DelegatingCallbackAnimation<T> {
-	at(time: Duration): T {
-		if (time.isLessThan(Duration.zero) || time.isGreaterThan(this.duration)) {
-			throw new Error(`Time ${time} is out of bounds for animation with duration ${this.duration.frame}`);
-		}
-		return super.at(time);
-	}
-}
-
-export class ClampingCallbackAnimation<T> extends DelegatingCallbackAnimation<T> {
-	at(time: Duration): T {
-		return super.at(time.clamp(Duration.zero, this.duration));
-	}
-}
-
-export class RepeatingCallbackAnimation<T> extends DelegatingCallbackAnimation<T> {
-	at(time: Duration): T {
-		return super.at(time.wrap(this.duration));
+		return this.callback(this.transform(time));
 	}
 }
 
 export class ConstantAnimation<T> extends Animation<T> {
 	constructor(private readonly value: T, duration = Duration.zero) {
-		super(duration);
+		super(duration, delegateTime);
 	}
 
 	at(): T { return this.value; }
@@ -111,16 +112,16 @@ export type Lerp<T> = (from: T, to: T, animation: number) => T;
 
 export const lerpNumber: Lerp<number> = (from, to, animation) => from + (to - from) * animation;
 
-export type TweenCreator<T> = (from: T, to: T, duration: Duration, easing?: (input: number) => number) => Animation<T>;
+export type TweenCreator<T> = (settings: { from: T, to: T, duration: Duration, easing?: (input: number) => number, strategy?: TimeTransformStrategy}) => Animation<T>;
 
 export function defineTween<T> (lerp: Lerp<T>): TweenCreator<T> {
-	return (from, to, duration, easing) => new DelegatingCallbackAnimation(duration, (time) => {
+	return ({ from, to, duration, easing, strategy }) => new CallbackAnimation(duration, strategy ?? clampTime, (time) => {
 		const animation = easing ? easing(time.dividedBy(duration)) : time.dividedBy(duration);
 		return lerp(from, to, animation);
 	});
 }
 
-export const tweenNumber = defineTween<number>((from, to, animation) => lerpNumber(from, to, animation));
+export const tweenNumber = defineTween(lerpNumber);
 
 export function constant<T>(value: T): Animatable<T> {
 	return () => value;
@@ -137,21 +138,21 @@ export function fromAnimatableProperties<T extends object>(source: { [k in keyof
 	};
 }
 
-export function fromAnimationProperties<T extends object>(source: { [k in keyof T]: Animation<T[k]> }): Animation<T> {
+export function fromAnimationProperties<T extends object>(source: { [k in keyof T]: Animation<T[k]> }, strategy = clampTime): Animation<T> {
 	const keys = Object.keys(source) as (keyof T)[];
 	const duration = keys.reduce((max, key) => Duration.max(max, source[key].duration), Duration.zero);
 	const transformed = Object.fromEntries(keys.map(key => [key, source[key].at.bind(source[key])])) as { [k in keyof T]: Animatable<T[k]> };
-	return new ClampingCallbackAnimation(duration, fromAnimatableProperties(transformed));
+	return new CallbackAnimation(duration, strategy, fromAnimatableProperties(transformed));
 }
 
-export function fromAnimationArray<T>(source: Animation<T>[]): Animation<T[]> {
+export function fromAnimationArray<T>(source: Animation<T>[], strategy = clampTime): Animation<T[]> {
 	const duration = source.reduce((max, anim) => Duration.max(max, anim.duration), Duration.zero);
-	return new ClampingCallbackAnimation(duration, (time) => source.map(anim => anim.at(time)));
+	return new CallbackAnimation(duration, strategy, (time) => source.map(anim => anim.at(time)));
 }
 
-export function animationSequence<T>(animations: Animation<T>[]): Animation<T> {
+export function animationSequence<T>(animations: Animation<T>[], strategy = clampTime): Animation<T> {
 	const totalDuration = animations.reduce((sum, anim) => sum.add(anim.duration), Duration.zero);
-	return new ClampingCallbackAnimation(totalDuration, (time) => {
+	return new CallbackAnimation(totalDuration, strategy, (time) => {
 		let nextStart = Duration.zero;
 		for (const anim of animations) {
 			nextStart = nextStart.add(anim.duration);
@@ -170,13 +171,11 @@ export function paintAll(painters: Animation<Painter[]>): Animation<Painter> {
 	});
 }
 
-type TimeTransform = (time: Duration) => Duration;
-
 function windowBetween(from: Duration, to: Duration): TimeTransform {
 	return (time: Duration) => time.subtract(from).clamp(Duration.zero, to.subtract(from));
 }
 
-export function animationStaggered<T>(animations: Animation<T>[]): Animation<T[]> {
+export function animationStaggered<T>(animations: Animation<T>[], strategy = clampTime): Animation<T[]> {
 	const durations = [...animations.map(anim => anim.duration)];
 	const totalDuration = durations.reduce((sum, duration) => sum.add(duration), Duration.zero);
 	let nextStart = Duration.zero;
@@ -185,7 +184,7 @@ export function animationStaggered<T>(animations: Animation<T>[]): Animation<T[]
 		nextStart = nextStart.add(duration);
 		return result;
 	});
-	return new ClampingCallbackAnimation(totalDuration, (time) => {
+	return new CallbackAnimation(totalDuration, strategy, (time) => {
 		return animations.map((anim, index) => anim.at(windows[index](time)));
 	});
 }

@@ -1,12 +1,29 @@
 import { easings } from "./lib/easings";
-import { Animation, animationSequence, ConstantAnimation, animationStaggered, Duration, fromAnimationProperties, tweenNumber, paintAll, Painter, Lerp, lerpNumber, defineTween } from "./lib/render";
+import {
+	Animation,
+	animationSequence,
+	animationStaggered,
+	ConstantAnimation,
+	defineTween,
+	Duration,
+	fromAnimationProperties,
+	Lerp,
+	lerpNumber,
+	paintAll,
+	Painter,
+	tweenNumber,
+} from "./lib/render";
 
-type Point = { x: number, y: number; };
+type Point = { x: number; y: number };
 
 const noop: Painter = () => {};
 
-function createCirclePainterWithAnim(settingsAnim: Animation<{ position: Point, radius: number; fillStyle: string; }>): Animation<Painter> {
-	return settingsAnim.derive(settings => context => {
+function createCirclePainterWithAnim(
+	settingsAnim: Animation<
+		{ position: Point; radius: number; fillStyle: string }
+	>,
+): Animation<Painter> {
+	return settingsAnim.derive((settings) => (context) => {
 		const x = settings.position.x;
 		const y = settings.position.y;
 		context.canvasContext.beginPath();
@@ -17,16 +34,18 @@ function createCirclePainterWithAnim(settingsAnim: Animation<{ position: Point, 
 	});
 }
 
-function createColoredRectPainter(settingsAnim: Animation<{ color: string; }>): Animation<Painter> {
-	return settingsAnim.derive(settings => context => {
+function createColoredRectPainter(
+	settingsAnim: Animation<{ color: string }>,
+): Animation<Painter> {
+	return settingsAnim.derive((settings) => (context) => {
 		context.canvasContext.fillStyle = settings.color;
 		context.canvasContext.fillRect(0, 0, context.canvasWidth, 20);
 	});
 }
 
 function createColorHueAnimation(duration: Duration): Animation<string> {
-	const hueAnim = tweenNumber(0, 360, duration);
-	return hueAnim.derive(hue => `hsl(${hue}, 100%, 50%)`);
+	const hueAnim = tweenNumber({ from: 0, to: 360, duration });
+	return hueAnim.derive((hue) => `hsl(${hue}, 100%, 50%)`);
 }
 
 const lerpPoint: Lerp<Point> = (a, b, t) => ({
@@ -42,32 +61,57 @@ const renderRect = createColoredRectPainter(fromAnimationProperties({
 
 const renderCircles = paintAll(animationStaggered([
 	createCirclePainterWithAnim(fromAnimationProperties({
-		position: tweenPoint({ x: 20, y: 20 }, { x: 280, y: 20 }, new Duration(60), easings.easeInOut),
+		position: tweenPoint({
+			from: { x: 20, y: 20 },
+			to: { x: 280, y: 20 },
+			duration: new Duration(60),
+			easing: easings.easeInOut,
+		}),
 		radius: new ConstantAnimation(20),
-		fillStyle: new ConstantAnimation("blue")
+		fillStyle: new ConstantAnimation("blue"),
 	})),
 	createCirclePainterWithAnim(fromAnimationProperties({
 		position: fromAnimationProperties({
-			x: tweenNumber(20, 280, new Duration(60), easings.easeInOut),
+			x: tweenNumber({
+				from: 20,
+				to: 280,
+				duration: new Duration(60),
+				easing: easings.easeInOut,
+			}),
 			y: new ConstantAnimation(90),
 		}),
 		radius: animationSequence([
-			tweenNumber(20, 40, new Duration(30), easings.easeOut),
-			tweenNumber(40, 20, new Duration(30), easings.easeInBounce),
+			tweenNumber({
+				from: 20,
+				to: 40,
+				duration: new Duration(30),
+				easing: easings.easeOut,
+			}),
+			tweenNumber({
+				from: 40,
+				to: 20,
+				duration: new Duration(30),
+				easing: easings.easeInBounce,
+			}),
 		]),
-		fillStyle: new ConstantAnimation("red")
+		fillStyle: new ConstantAnimation("red"),
 	})),
 	createCirclePainterWithAnim(
-		tweenPoint({ x: 20, y: 160 }, { x: 280, y: 160 }, new Duration(60), easings.easeInOut)
-			.derive(position => ({
+		tweenPoint({
+			from: { x: 20, y: 160 },
+			to: { x: 280, y: 160 },
+			duration: new Duration(60),
+			easing: easings.easeInOut,
+		})
+			.derive((position) => ({
 				position,
 				radius: 20,
-				fillStyle: "green"
+				fillStyle: "green",
 			})),
 	),
 ]))
-.extendClamping(new Duration(60))
-.delayClamping(new Duration(60));
+	.extendClamping(new Duration(60))
+	.delayClamping(new Duration(60));
 
 export const renderRectAndCircle = animationSequence([
 	renderRect,
