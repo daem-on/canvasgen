@@ -29,6 +29,14 @@ export class Duration {
 		return this.frame > other.frame;
 	}
 
+	clamp(min: Duration, max: Duration): Duration {
+		return new Duration(Math.min(max.frame, Math.max(min.frame, this.frame)));
+	}
+
+	wrap(max: Duration): Duration {
+		return new Duration((this.frame % max.frame + max.frame) % max.frame);
+	}
+
 	static min(a: Duration, b: Duration): Duration {
 		return new Duration(Math.min(a.frame, b.frame));
 	}
@@ -40,18 +48,28 @@ export class Duration {
 	static zero = new Duration(0);
 }
 
-export abstract class Animatable<T> {
+export type Animatable<T> = (time: Duration) => T;
+
+export abstract class Animation<T> {
 	constructor(public readonly duration: Duration) { }
 
 	abstract at(time: Duration): T;
 
-	derive<U>(callback: (value: T) => U): Animatable<U> {
-		return new CallbackAnimatable(this.duration, (time) => callback(this.at(time)));
+	derive<U>(callback: (value: T) => U): Animation<U> {
+		return new DelegatingCallbackAnimation(this.duration, (time) => callback(this.at(time)));
+	}
+
+	delayClamping(by: Duration): Animation<T> {
+		return new ClampingCallbackAnimation(this.duration.add(by), (time) => this.at(time.subtract(by)));
+	}
+
+	extendClamping(by: Duration): Animation<T> {
+		return new ClampingCallbackAnimation(this.duration.add(by), (time) => this.at(time));
 	}
 }
 
-export class CallbackAnimatable<T> extends Animatable<T> {
-	constructor(duration: Duration, private readonly callback: (time: Duration) => T) {
+export class DelegatingCallbackAnimation<T> extends Animation<T> {
+	constructor(duration: Duration, private readonly callback: Animatable<T>) {
 		super(duration);
 	}
 
@@ -60,67 +78,100 @@ export class CallbackAnimatable<T> extends Animatable<T> {
 	}
 }
 
+export class ThrowingCallbackAnimation<T> extends DelegatingCallbackAnimation<T> {
+	at(time: Duration): T {
+		if (time.isLessThan(Duration.zero) || time.isGreaterThan(this.duration)) {
+			throw new Error(`Time ${time} is out of bounds for animation with duration ${this.duration.frame}`);
+		}
+		return super.at(time);
+	}
+}
+
+export class ClampingCallbackAnimation<T> extends DelegatingCallbackAnimation<T> {
+	at(time: Duration): T {
+		return super.at(time.clamp(Duration.zero, this.duration));
+	}
+}
+
+export class RepeatingCallbackAnimation<T> extends DelegatingCallbackAnimation<T> {
+	at(time: Duration): T {
+		return super.at(time.wrap(this.duration));
+	}
+}
+
+export class ConstantAnimation<T> extends Animation<T> {
+	constructor(private readonly value: T, duration = Duration.zero) {
+		super(duration);
+	}
+
+	at(): T { return this.value; }
+}
+
 export function lerp(from: number, to: number, animation: number): number {
 	return from + (to - from) * animation;
 }
 
 export function constant<T>(value: T): Animatable<T> {
-	return new CallbackAnimatable(Duration.zero, () => value);
+	return () => value;
 }
 
-export function numberTween(from: number, to: number, duration: Duration, easing?: (input: number) => number): Animatable<number> {
+export function numberTween(from: number, to: number, duration: Duration, easing?: (input: number) => number): Animation<number> {
 	easing = easing || ((input: number) => input);
-	return new CallbackAnimatable(duration, (time) => lerp(from, to, easing(time.dividedBy(duration))));
+	return new ClampingCallbackAnimation(duration, (time) => lerp(from, to, easing(time.dividedBy(duration))));
 }
 
-export function fromTweenProperties<T extends object>(source: { [k in keyof T]: Animatable<T[k]> }): Animatable<T> {
+export function fromAnimatableProperties<T extends object>(source: { [k in keyof T]: Animatable<T[k]> }): Animatable<T> {
 	const keys = Object.keys(source) as (keyof T)[];
-	const duration = keys.reduce((max, key) => Duration.max(max, source[key].duration), Duration.zero);
-	return new CallbackAnimatable(duration, (time) => {
+	return (time) => {
 		const result = {} as T;
 		for (const key of keys) {
-			result[key] = source[key].at(time);
+			result[key] = source[key](time);
 		}
 		return result;
-	});
+	};
 }
 
-export function fromTweenArray<T>(source: Animatable<T>[]): Animatable<T[]> {
-	const duration = source.reduce((max, tween) => Duration.max(max, tween.duration), Duration.zero);
-	return new CallbackAnimatable(duration, (time) => source.map(tween => tween.at(time)));
+export function fromAnimationProperties<T extends object>(source: { [k in keyof T]: Animation<T[k]> }): Animation<T> {
+	const keys = Object.keys(source) as (keyof T)[];
+	const duration = keys.reduce((max, key) => Duration.max(max, source[key].duration), Duration.zero);
+	const transformed = Object.fromEntries(keys.map(key => [key, source[key].at.bind(source[key])])) as { [k in keyof T]: Animatable<T[k]> };
+	return new ClampingCallbackAnimation(duration, fromAnimatableProperties(transformed));
 }
 
-export function timedSequentialTweens<T>(tweens: Animatable<T>[]): Animatable<T> {
-	const totalDuration = tweens.reduce((sum, tween) => sum.add(tween.duration), Duration.zero);
-	return new CallbackAnimatable(totalDuration, (time) => {
+export function fromAnimationArray<T>(source: Animation<T>[]): Animation<T[]> {
+	const duration = source.reduce((max, anim) => Duration.max(max, anim.duration), Duration.zero);
+	return new ClampingCallbackAnimation(duration, (time) => source.map(anim => anim.at(time)));
+}
+
+export function animationSequence<T>(animations: Animation<T>[]): Animation<T> {
+	const totalDuration = animations.reduce((sum, anim) => sum.add(anim.duration), Duration.zero);
+	return new ClampingCallbackAnimation(totalDuration, (time) => {
 		let nextStart = Duration.zero;
-		for (const tween of tweens) {
-			nextStart = nextStart.add(tween.duration);
+		for (const anim of animations) {
+			nextStart = nextStart.add(anim.duration);
 			if (time.isLessThan(nextStart)) {
-				return tween.at(time.subtract(nextStart.subtract(tween.duration)));
+				return anim.at(time.subtract(nextStart.subtract(anim.duration)));
 			}
 		}
-		const lastTween = tweens[tweens.length - 1];
-		return lastTween.at(time.subtract(nextStart.subtract(lastTween.duration)));
+		const lastAnim = animations[animations.length - 1];
+		return lastAnim.at(time.subtract(nextStart.subtract(lastAnim.duration)));
 	});
 }
 
-export function parallel(painters: Animatable<Painter[]>): Animatable<Painter> {
+export function paintAll(painters: Animation<Painter[]>): Animation<Painter> {
 	return painters.derive(value => context => {
-		for (const painter of value) {
-			painter(context);
-		}
+		for (const painter of value) painter(context);
 	});
 }
 
 type TimeTransform = (time: Duration) => Duration;
 
 function windowBetween(from: Duration, to: Duration): TimeTransform {
-	return (time: Duration) => Duration.min(to.subtract(from), Duration.max(Duration.zero, time.subtract(from)));
+	return (time: Duration) => time.subtract(from).clamp(Duration.zero, to.subtract(from));
 }
 
-export function createSequenceWindows<T>(tweens: Animatable<T>[]): Animatable<T[]> {
-	const durations = [...tweens.map(tween => tween.duration)];
+export function animationStaggered<T>(animations: Animation<T>[]): Animation<T[]> {
+	const durations = [...animations.map(anim => anim.duration)];
 	const totalDuration = durations.reduce((sum, duration) => sum.add(duration), Duration.zero);
 	let nextStart = Duration.zero;
 	const windows = durations.map(duration => {
@@ -128,19 +179,7 @@ export function createSequenceWindows<T>(tweens: Animatable<T>[]): Animatable<T[
 		nextStart = nextStart.add(duration);
 		return result;
 	});
-	return new CallbackAnimatable(totalDuration, (time) => {
-		return tweens.map((tween, index) => tween.at(windows[index](time)));
+	return new ClampingCallbackAnimation(totalDuration, (time) => {
+		return animations.map((anim, index) => anim.at(windows[index](time)));
 	});
-}
-
-export function delay<T>(tween: Animatable<T>, by: Duration): Animatable<T> {
-	return new CallbackAnimatable(tween.duration.add(by), (time) => {
-		return tween.at(Duration.max(Duration.zero, time.subtract(by)));
-	})
-};
-
-export function extend<T>(tween: Animatable<T>, by: Duration): Animatable<T> {
-	return new CallbackAnimatable(tween.duration.add(by), (time) => {
-		return tween.at(Duration.min(tween.duration, time));
-	})
 }
