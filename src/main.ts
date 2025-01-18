@@ -1,5 +1,5 @@
 import { Duration, PaintingContext } from './lib/render';
-import { renderRectAndCircle } from './scene';
+import { renderScene } from './scene';
 import './style.css'
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
@@ -21,7 +21,7 @@ const context: PaintingContext = {
 
 function render(frame: number) {
   canvasContext.clearRect(0, 0, canvas.width, canvas.height);
-  const painter = renderRectAndCircle.at(new Duration(frame));
+  const painter = renderScene.at(new Duration(frame));
   painter(context);
 }
 

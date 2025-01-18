@@ -6,6 +6,7 @@ import {
 	ConstantAnimation,
 	defineTween,
 	Duration,
+	fromAnimationArray,
 	fromAnimationProperties,
 	Lerp,
 	lerpNumber,
@@ -46,6 +47,16 @@ function createColoredRectPainter(
 function createColorHueAnimation(duration: Duration): Animation<string> {
 	const hueAnim = tweenNumber({ from: 0, to: 360, duration });
 	return hueAnim.derive((hue) => `hsl(${hue}, 100%, 50%)`);
+}
+
+function createTextAnimation(
+	settingsAnim: Animation<{ text: string; x: number; y: number }>,
+): Animation<Painter> {
+	return settingsAnim.derive((settings) => (context) => {
+		context.canvasContext.font = "20px sans-serif";
+		context.canvasContext.fillStyle = "black";
+		context.canvasContext.fillText(settings.text, settings.x, settings.y);
+	});
 }
 
 const lerpPoint: Lerp<Point> = (a, b, t) => ({
@@ -112,8 +123,22 @@ const renderCircles = paintAll(animationStaggered([
 ]))
 	.extend({ before: new Duration(60), after: new Duration(60) });
 
-export const renderRectAndCircle = animationSequence([
+const renderRectAndCircle = animationSequence([
 	renderRect,
 	renderCircles,
-	new ConstantAnimation(noop),
+	new ConstantAnimation(noop, new Duration(30)),
 ]);
+
+const renderFrameNumber = createTextAnimation(fromAnimationProperties({
+	text: tweenNumber({
+		from: 0,
+		to: renderRectAndCircle.duration.frame,
+		duration: renderRectAndCircle.duration,
+	}).derive((value) => `Frame: ${Math.floor(value)}`),
+	x: new ConstantAnimation(180),
+	y: new ConstantAnimation(280),
+}));
+
+export const renderScene = paintAll(
+	fromAnimationArray([renderRectAndCircle, renderFrameNumber]),
+);
