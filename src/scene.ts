@@ -1,7 +1,7 @@
 import { easings } from "./lib/easings";
-import { Animatable, constant, createPainter, createAnimatableSequence, ease, numberTween, parallel, timedSequential, transformWith } from "./lib/render";
+import { Animatable, constant, createAnimatableSequence, createPainter, Frame, numberTween, parallel, timedSequential, transformWith } from "./lib/render";
 
-function createCirclePainterWithAnim(settings: { yAnim: Animatable, xAnim: Animatable, radius: number; fillStyle: string; }) {
+function createCirclePainterWithAnim(settings: { yAnim: Animatable<number>, xAnim: Animatable<number>, radius: number; fillStyle: string; }) {
 	return createPainter((context, frame) => {
 		const x = settings.xAnim(frame);
 		const y = settings.yAnim(frame);
@@ -13,17 +13,20 @@ function createCirclePainterWithAnim(settings: { yAnim: Animatable, xAnim: Anima
 	});
 }
 
+const hueAnim = numberTween(0, 360, new Frame(120));
+
 const renderRect = createPainter((context, frame) => {
-	context.canvasContext.fillStyle = `hsl(${frame / 120 * 360}deg, 100%, 50%)`;
+	const hue = hueAnim(frame);
+	context.canvasContext.fillStyle = `hsl(${hue}deg, 100%, 50%)`;
 	context.canvasContext.fillRect(0, 0, context.canvasWidth, 20);
 });
 
-const circlesSequence = createAnimatableSequence([20, 60, 60]);
+const circlesSequence = createAnimatableSequence([new Frame(20), new Frame(60), new Frame(60)]);
 
 const renderCircles = parallel([
 	transformWith(
 		createCirclePainterWithAnim({
-			xAnim: numberTween(20, 280, 60, easings.easeInOut),
+			xAnim: numberTween(20, 280, new Frame(60), easings.easeInOut),
 			yAnim: constant(20),
 			radius: 20,
 			fillStyle: "blue"
@@ -32,7 +35,7 @@ const renderCircles = parallel([
 	),
 	transformWith(
 		createCirclePainterWithAnim({
-			xAnim: numberTween(20, 280, 60, easings.easeInOut),
+			xAnim: numberTween(20, 280, new Frame(60), easings.easeInOut),
 			yAnim: constant(90),
 			radius: 20,
 			fillStyle: "blue"
@@ -42,7 +45,7 @@ const renderCircles = parallel([
 ]);
 
 export const renderRectAndCircle = timedSequential([
-	[renderRect, 120],
-	[renderCircles, 140],
+	[renderRect, new Frame(120)],
+	[renderCircles, new Frame(200)],
 ]);
 
