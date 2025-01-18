@@ -44,6 +44,10 @@ export abstract class Animatable<T> {
 	constructor(public readonly duration: Duration) { }
 
 	abstract at(time: Duration): T;
+
+	derive<U>(callback: (value: T) => U): Animatable<U> {
+		return new CallbackAnimatable(this.duration, (time) => callback(this.at(time)));
+	}
 }
 
 export class CallbackAnimatable<T> extends Animatable<T> {
@@ -102,8 +106,8 @@ export function timedSequentialTweens<T>(tweens: Animatable<T>[]): Animatable<T>
 }
 
 export function parallel(painters: Animatable<Painter[]>): Animatable<Painter> {
-	return new CallbackAnimatable(painters.duration, (time) => (context) => {
-		for (const painter of painters.at(time)) {
+	return painters.derive(value => context => {
+		for (const painter of value) {
 			painter(context);
 		}
 	});

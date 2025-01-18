@@ -1,32 +1,32 @@
 import { easings } from "./lib/easings";
-import { Animatable, CallbackAnimatable, constant, createSequenceWindows, delay, Duration, extend, fromTweenProperties, numberTween, Painter, parallel, timedSequentialTweens } from "./lib/render";
+import { Animatable, constant, createSequenceWindows, delay, Duration, extend, fromTweenProperties, numberTween, Painter, parallel, timedSequentialTweens } from "./lib/render";
 
 type Point = { x: number, y: number; };
 
 const noop: Painter = () => {};
 
-function createCirclePainterWithAnim(settings: Animatable<{ position: Point, radius: number; fillStyle: string; }>): Animatable<Painter> {
-	return new CallbackAnimatable(settings.duration, (time) => ((context) => {
-		const x = settings.at(time).position.x;
-		const y = settings.at(time).position.y;
+function createCirclePainterWithAnim(settingsAnim: Animatable<{ position: Point, radius: number; fillStyle: string; }>): Animatable<Painter> {
+	return settingsAnim.derive(settings => context => {
+		const x = settings.position.x;
+		const y = settings.position.y;
 		context.canvasContext.beginPath();
-		context.canvasContext.fillStyle = settings.at(time).fillStyle;
-		context.canvasContext.arc(x, y, settings.at(time).radius, 0, 2 * Math.PI);
+		context.canvasContext.fillStyle = settings.fillStyle;
+		context.canvasContext.arc(x, y, settings.radius, 0, 2 * Math.PI);
 		context.canvasContext.closePath();
 		context.canvasContext.fill();
-	}));
+	});
 }
 
-function createColoredRectPainter(settings: Animatable<{ color: string; }>): Animatable<Painter> {
-	return new CallbackAnimatable(settings.duration, (time) => ((context) => {
-		context.canvasContext.fillStyle = settings.at(time).color;
+function createColoredRectPainter(settingsAnim: Animatable<{ color: string; }>): Animatable<Painter> {
+	return settingsAnim.derive(settings => context => {
+		context.canvasContext.fillStyle = settings.color;
 		context.canvasContext.fillRect(0, 0, context.canvasWidth, 20);
-	}));
+	});
 }
 
 function createColorHueAnimation(duration: Duration): Animatable<string> {
 	const hueAnim = numberTween(0, 360, duration);
-	return new CallbackAnimatable(duration, (time) => `hsl(${hueAnim.at(time)}, 100%, 50%)`);
+	return hueAnim.derive(hue => `hsl(${hue}, 100%, 50%)`);
 }
 
 const renderRect = createColoredRectPainter(fromTweenProperties({
