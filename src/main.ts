@@ -21,7 +21,7 @@ const context: PaintingContext = {
 
 function render(frame: number) {
   canvasContext.clearRect(0, 0, canvas.width, canvas.height);
-  const painter = renderRectAndCircle(new Duration(frame));
+  const painter = renderRectAndCircle.at(new Duration(frame));
   painter(context);
 }
 

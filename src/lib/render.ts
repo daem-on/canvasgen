@@ -40,75 +40,103 @@ export class Duration {
 	static zero = new Duration(0);
 }
 
-export type Animatable<T> = (time: Duration) => T;
+export abstract class Animatable<T> {
+	constructor(public readonly duration: Duration) { }
 
-export type TimeTransform = (time: Duration) => Duration;
-
-export function transformTimeWith<T>(target: Animatable<T>, transform: TimeTransform): Animatable<T> {
-	return (time) => target(transform(time));
+	abstract at(time: Duration): T;
 }
 
-export function lerp(from: number, to: number, animation: number) {
+export class CallbackAnimatable<T> extends Animatable<T> {
+	constructor(duration: Duration, private readonly callback: (time: Duration) => T) {
+		super(duration);
+	}
+
+	at(time: Duration): T {
+		return this.callback(time);
+	}
+}
+
+export function lerp(from: number, to: number, animation: number): number {
 	return from + (to - from) * animation;
 }
 
 export function constant<T>(value: T): Animatable<T> {
-	return () => value;
+	return new CallbackAnimatable(Duration.zero, () => value);
 }
 
 export function numberTween(from: number, to: number, duration: Duration, easing?: (input: number) => number): Animatable<number> {
 	easing = easing || ((input: number) => input);
-	return (time) => lerp(from, to, easing(time.dividedBy(duration)));
+	return new CallbackAnimatable(duration, (time) => lerp(from, to, easing(time.dividedBy(duration))));
 }
 
 export function fromTweenProperties<T extends object>(source: { [k in keyof T]: Animatable<T[k]> }): Animatable<T> {
 	const keys = Object.keys(source) as (keyof T)[];
-	return (time) => {
+	const duration = keys.reduce((max, key) => Duration.max(max, source[key].duration), Duration.zero);
+	return new CallbackAnimatable(duration, (time) => {
 		const result = {} as T;
 		for (const key of keys) {
-			result[key] = source[key](time);
+			result[key] = source[key].at(time);
 		}
 		return result;
-	};
+	});
 }
 
 export function fromTweenArray<T>(source: Animatable<T>[]): Animatable<T[]> {
-	return (time) => source.map(tween => tween(time));
+	const duration = source.reduce((max, tween) => Duration.max(max, tween.duration), Duration.zero);
+	return new CallbackAnimatable(duration, (time) => source.map(tween => tween.at(time)));
 }
 
-export function timedSequentialTweens<T>(tweens: [Animatable<T>, Duration][]): Animatable<T> {
-	return (time) => {
+export function timedSequentialTweens<T>(tweens: Animatable<T>[]): Animatable<T> {
+	const totalDuration = tweens.reduce((sum, tween) => sum.add(tween.duration), Duration.zero);
+	return new CallbackAnimatable(totalDuration, (time) => {
 		let nextStart = Duration.zero;
-		for (const [tween, duration] of tweens) {
-			nextStart = nextStart.add(duration);
+		for (const tween of tweens) {
+			nextStart = nextStart.add(tween.duration);
 			if (time.isLessThan(nextStart)) {
-				return tween(time.subtract(nextStart.subtract(duration)));
+				return tween.at(time.subtract(nextStart.subtract(tween.duration)));
 			}
 		}
 		const lastTween = tweens[tweens.length - 1];
-		return lastTween[0](time.subtract(nextStart.subtract(lastTween[1])));
-	};
+		return lastTween.at(time.subtract(nextStart.subtract(lastTween.duration)));
+	});
 }
 
 export function parallel(painters: Animatable<Painter[]>): Animatable<Painter> {
-	return (time) => (context) => {
-		for (const painter of painters(time)) {
+	return new CallbackAnimatable(painters.duration, (time) => (context) => {
+		for (const painter of painters.at(time)) {
 			painter(context);
 		}
-	};
+	});
 }
 
-export function windowBetween(from: Duration, to: Duration): TimeTransform {
+type TimeTransform = (time: Duration) => Duration;
+
+function windowBetween(from: Duration, to: Duration): TimeTransform {
 	return (time: Duration) => Duration.min(to.subtract(from), Duration.max(Duration.zero, time.subtract(from)));
 }
 
-export function createSequenceWindows(durations: Duration[]): TimeTransform[] {
-	const result: TimeTransform[] = [];
-	let current = Duration.zero;
-	for (const duration of durations) {
-		const next = current.add(duration)
-		result.push(windowBetween(current, next));
-		current = next;
-	}
-	return result;
+export function createSequenceWindows<T>(tweens: Animatable<T>[]): Animatable<T[]> {
+	const durations = [...tweens.map(tween => tween.duration)];
+	const totalDuration = durations.reduce((sum, duration) => sum.add(duration), Duration.zero);
+	let nextStart = Duration.zero;
+	const windows = durations.map(duration => {
+		const result = windowBetween(nextStart, nextStart.add(duration));
+		nextStart = nextStart.add(duration);
+		return result;
+	});
+	return new CallbackAnimatable(totalDuration, (time) => {
+		return tweens.map((tween, index) => tween.at(windows[index](time)));
+	});
+}
+
+export function delay<T>(tween: Animatable<T>, by: Duration): Animatable<T> {
+	return new CallbackAnimatable(tween.duration.add(by), (time) => {
+		return tween.at(Duration.max(Duration.zero, time.subtract(by)));
+	})
+};
+
+export function extend<T>(tween: Animatable<T>, by: Duration): Animatable<T> {
+	return new CallbackAnimatable(tween.duration.add(by), (time) => {
+		return tween.at(Duration.min(tween.duration, time));
+	})
 }
