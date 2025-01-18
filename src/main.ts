@@ -5,7 +5,7 @@ import './style.css'
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>
     <canvas id="c"></canvas>
-    <input type="range" id="r" min="0" max="1" step="any">
+    <input type="range" id="r" min="0" max="400">
   </div>
 `
 
