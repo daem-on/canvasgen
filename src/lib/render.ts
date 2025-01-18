@@ -107,17 +107,23 @@ export class ConstantAnimation<T> extends Animation<T> {
 	at(): T { return this.value; }
 }
 
-export function lerp(from: number, to: number, animation: number): number {
-	return from + (to - from) * animation;
+export type Lerp<T> = (from: T, to: T, animation: number) => T;
+
+export const lerpNumber: Lerp<number> = (from, to, animation) => from + (to - from) * animation;
+
+export type TweenCreator<T> = (from: T, to: T, duration: Duration, easing?: (input: number) => number) => Animation<T>;
+
+export function defineTween<T> (lerp: Lerp<T>): TweenCreator<T> {
+	return (from, to, duration, easing) => new DelegatingCallbackAnimation(duration, (time) => {
+		const animation = easing ? easing(time.dividedBy(duration)) : time.dividedBy(duration);
+		return lerp(from, to, animation);
+	});
 }
+
+export const tweenNumber = defineTween<number>((from, to, animation) => lerpNumber(from, to, animation));
 
 export function constant<T>(value: T): Animatable<T> {
 	return () => value;
-}
-
-export function numberTween(from: number, to: number, duration: Duration, easing?: (input: number) => number): Animation<number> {
-	easing = easing || ((input: number) => input);
-	return new ClampingCallbackAnimation(duration, (time) => lerp(from, to, easing(time.dividedBy(duration))));
 }
 
 export function fromAnimatableProperties<T extends object>(source: { [k in keyof T]: Animatable<T[k]> }): Animatable<T> {

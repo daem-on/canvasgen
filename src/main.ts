@@ -4,8 +4,8 @@ import './style.css'
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>
-    <canvas id="c"></canvas>
-    <input type="range" id="r" min="0" max="400">
+    <canvas id="c" width="300" height="300"></canvas>
+    <input type="range" id="r" min="0" max="450">
   </div>
 `
 
