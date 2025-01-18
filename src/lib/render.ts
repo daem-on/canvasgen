@@ -76,6 +76,20 @@ export function fromTweenProperties<T extends object>(source: { [k in keyof T]: 
 	};
 }
 
+export function timedSequentialTweens<T>(tweens: [Animatable<T>, Duration][]): Animatable<T> {
+	return (time) => {
+		let nextStart = Duration.zero;
+		for (const [tween, duration] of tweens) {
+			nextStart = nextStart.add(duration);
+			if (time.isLessThan(nextStart)) {
+				return tween(time.subtract(nextStart.subtract(duration)));
+			}
+		}
+		const lastTween = tweens[tweens.length - 1];
+		return lastTween[0](time.subtract(nextStart.subtract(lastTween[1])));
+	};
+}
+
 export function parallel(painters: Painter[]): Painter {
 	return createPainter((context, time) => {
 		for (const p of painters) p(context, time);

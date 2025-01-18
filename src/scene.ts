@@ -1,5 +1,5 @@
 import { easings } from "./lib/easings";
-import { Animatable, constant, createSequenceWindows, createPainter, Duration, numberTween, parallel, timedSequential, transformTimeWith, fromTweenProperties, Painter } from "./lib/render";
+import { Animatable, constant, createSequenceWindows, createPainter, Duration, numberTween, parallel, timedSequential, transformTimeWith, fromTweenProperties, Painter, timedSequentialTweens } from "./lib/render";
 
 type Point = { x: number, y: number; };
 
@@ -51,7 +51,10 @@ const renderCircles = parallel([
 				x: numberTween(20, 280, new Duration(60), easings.easeInOut),
 				y: constant(90),
 			}),
-			radius: constant(20),
+			radius: timedSequentialTweens([
+				[numberTween(20, 40, new Duration(30), easings.easeOut), new Duration(30)],
+				[numberTween(40, 20, new Duration(30), easings.easeIn), new Duration(30)],
+			]),
 			fillStyle: constant("red")
 		}),
 		circlesSequence[2],
