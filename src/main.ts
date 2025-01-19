@@ -1,4 +1,4 @@
-import { Duration, PaintingContext } from './lib/render';
+import { Duration, PaintingContext } from './lib/core';
 import { renderScene } from './scene';
 import './style.css'
 

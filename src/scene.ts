@@ -13,7 +13,7 @@ import {
 	paintAll,
 	Painter,
 	tweenNumber,
-} from "./lib/render";
+} from "./lib/core";
 
 type Point = { x: number; y: number };
 
