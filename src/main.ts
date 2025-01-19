@@ -1,6 +1,6 @@
 import { Duration, PaintingContext } from './lib/core';
-import { renderScene } from './scene';
-import './style.css'
+import { createTextSceneRenderer } from './text-scene';
+import './style.css';
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>
@@ -19,14 +19,20 @@ const context: PaintingContext = {
   canvasWidth: canvas.width,
 }
 
+const renderTextScene = createTextSceneRenderer(canvasContext);
+
 function render(frame: number) {
   canvasContext.clearRect(0, 0, canvas.width, canvas.height);
-  const painter = renderScene.at(new Duration(frame));
+  const painter = renderTextScene.at(new Duration(frame));
   painter(context);
 }
 
 render(0);
 
+rangeInput.max = renderTextScene.duration.frame.toString();
+
 rangeInput.addEventListener("input", () => {
   render(Number.parseFloat(rangeInput.value));
 });
+
+rangeInput.value = "0";
