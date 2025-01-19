@@ -54,7 +54,7 @@ export type Animatable<T> = (time: Duration) => T;
 
 type TimeTransform = (time: Duration) => Duration;
 
-type TimeTransformStrategy = (animation: Animation<any>) => TimeTransform;
+export type TimeTransformStrategy = (animation: Animation<any>) => TimeTransform;
 
 export const delegateTime: TimeTransformStrategy = () => (time) => time;
 
@@ -128,16 +128,16 @@ export class ConstantAnimation<T> extends Animation<T> {
 
 export type Lerp<T> = (from: T, to: T, animation: number) => T;
 
-export const lerpNumber: Lerp<number> = (from, to, animation) =>
-	from + (to - from) * animation;
+export type AnimationSettings = {
+	duration: Duration;
+	easing?: (input: number) => number;
+	strategy?: TimeTransformStrategy;
+}
 
 export type TweenCreator<T> = (
-	settings: {
+	settings: AnimationSettings & {
 		from: T;
 		to: T;
-		duration: Duration;
-		easing?: (input: number) => number;
-		strategy?: TimeTransformStrategy;
 	},
 ) => Animation<T>;
 
@@ -150,8 +150,6 @@ export function defineTween<T>(lerp: Lerp<T>): TweenCreator<T> {
 			return lerp(from, to, animation);
 		});
 }
-
-export const tweenNumber = defineTween(lerpNumber);
 
 export function constant<T>(value: T): Animatable<T> {
 	return () => value;
