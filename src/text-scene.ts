@@ -14,10 +14,11 @@ import {
 	TextSettings,
 	tweenNumber,
 } from "./lib/std.ts";
+import { Context2D } from "./lib/types.ts";
 
 function getWordWidths(
 	words: string[],
-	context: CanvasRenderingContext2D,
+	context: Context2D,
 ): number[] {
 	return words.map((word) => context.measureText(word).width);
 }
@@ -54,7 +55,7 @@ function createTextFloatUpAnimation(
 
 function createPerWordFloatUpAnimations(
 	words: string[],
-	context: CanvasRenderingContext2D,
+	context: Context2D,
 	baseX: number,
 	eachAnimSettings: AnimationSettings,
 ): Animation<TextSettings>[] {
@@ -74,7 +75,7 @@ function createPerWordFloatUpAnimations(
 }
 
 export function createTextSceneRenderer(
-	context: CanvasRenderingContext2D,
+	context: Context2D,
 ): Animation<Painter> {
 	return paintAll(fromAnimationArray([
 		createTextPainter(

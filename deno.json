@@ -12,5 +12,10 @@
 	},
 	"fmt": {
 		"useTabs": true
+	},
+	"tasks": {
+		"render": {
+			"command": "deno --allow-env --allow-ffi --allow-read --allow-write server/main.ts"
+		}
 	}
 }

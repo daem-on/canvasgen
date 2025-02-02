@@ -1,4 +1,6 @@
-export type Painter = (context: CanvasRenderingContext2D) => undefined;
+import { Context2D } from "./types.ts";
+
+export type Painter = (context: Context2D) => undefined;
 
 export class Duration {
 	constructor(public readonly frame: number) {}

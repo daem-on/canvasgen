@@ -1,5 +1,5 @@
-import { Duration } from "./lib/core.ts";
-import { createTextSceneRenderer } from "./text-scene.ts";
+import { Duration } from "../src/lib/core.ts";
+import { createTextSceneRenderer } from "../src/text-scene.ts";
 import "./style.css";
 
 document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
@@ -35,7 +35,7 @@ rangeInput.addEventListener("input", () => renderCurrentTime());
 rangeInput.value = "0";
 
 if (import.meta.hot) {
-	import.meta.hot.accept("./text-scene", (newModule) => {
+	import.meta.hot.accept("../src/text-scene.ts", (newModule) => {
 		if (newModule) {
 			renderTextScene = newModule.createTextSceneRenderer(canvasContext);
 			rangeInput.max = renderTextScene.duration.frame.toString();

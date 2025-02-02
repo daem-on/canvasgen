@@ -79,7 +79,7 @@ export function createCirclePainter(
 		(settings) => (context) => {
 			const { center: { x, y }, radius } = settings;
 			context.beginPath();
-			context.arc(x, y, radius, 0, 2 * Math.PI);
+			context.arc(x, y, radius, 0, 2 * Math.PI, false);
 			context.closePath();
 			if (settings.fillStyle) {
 				context.fillStyle = settings.fillStyle;
@@ -139,6 +139,7 @@ export function createTextPainter(
 				fillStyle,
 				strokeStyle,
 			} = settings;
+			if (!text.length) return;
 			context.font = font;
 			if (fillStyle) {
 				context.fillStyle = fillStyle;
