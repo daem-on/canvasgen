@@ -4,7 +4,7 @@ import {
 	defineTween,
 	Lerp,
 	Painter,
-} from "./core";
+} from "./core.ts";
 
 export const lerpNumber: Lerp<number> = (a, b, t) => a + (b - a) * t;
 

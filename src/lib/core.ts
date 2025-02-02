@@ -52,7 +52,9 @@ export type Animatable<T> = (time: Duration) => T;
 
 type TimeTransform = (time: Duration) => Duration;
 
-export type TimeTransformStrategy = (animation: Animation<any>) => TimeTransform;
+export type TimeTransformStrategy = (
+	animation: Animation<unknown>,
+) => TimeTransform;
 
 export const delegateTime: TimeTransformStrategy = () => (time) => time;
 
@@ -130,7 +132,7 @@ export type AnimationSettings = {
 	duration: Duration;
 	easing?: (input: number) => number;
 	strategy?: TimeTransformStrategy;
-}
+};
 
 export type TweenCreator<T> = (
 	settings: AnimationSettings & {

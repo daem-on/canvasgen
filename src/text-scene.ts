@@ -7,13 +7,13 @@ import {
 	fromAnimationProperties,
 	paintAll,
 	Painter,
-} from "./lib/core";
+} from "./lib/core.ts";
 import {
 	animateTextSlice,
 	createTextPainter,
 	TextSettings,
 	tweenNumber,
-} from "./lib/std";
+} from "./lib/std.ts";
 
 function getWordWidths(
 	words: string[],

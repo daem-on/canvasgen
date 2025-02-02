@@ -8,14 +8,14 @@ import {
 	fromAnimationProperties,
 	paintAll,
 	Painter,
-} from "./lib/core";
-import { easings } from "./lib/easings";
+} from "./lib/core.ts";
+import { easings } from "./lib/easings.ts";
 import {
 	createCirclePainter,
 	createRectPainter,
 	tweenNumber,
 	tweenPoint,
-} from "./lib/std";
+} from "./lib/std.ts";
 
 const noop: Painter = () => {};
 
