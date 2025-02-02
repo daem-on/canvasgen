@@ -78,16 +78,16 @@ export function createCirclePainter(
 	return settings.derive(
 		(settings) => (context) => {
 			const { center: { x, y }, radius } = settings;
-			context.canvasContext.beginPath();
-			context.canvasContext.arc(x, y, radius, 0, 2 * Math.PI);
-			context.canvasContext.closePath();
+			context.beginPath();
+			context.arc(x, y, radius, 0, 2 * Math.PI);
+			context.closePath();
 			if (settings.fillStyle) {
-				context.canvasContext.fillStyle = settings.fillStyle;
-				context.canvasContext.fill();
+				context.fillStyle = settings.fillStyle;
+				context.fill();
 			}
 			if (settings.strokeStyle) {
-				context.canvasContext.strokeStyle = settings.strokeStyle;
-				context.canvasContext.stroke();
+				context.strokeStyle = settings.strokeStyle;
+				context.stroke();
 			}
 		},
 	);
@@ -110,12 +110,12 @@ export function createRectPainter(
 				strokeStyle,
 			} = settings;
 			if (fillStyle) {
-				context.canvasContext.fillStyle = fillStyle;
-				context.canvasContext.fillRect(x, y, width, height);
+				context.fillStyle = fillStyle;
+				context.fillRect(x, y, width, height);
 			}
 			if (strokeStyle) {
-				context.canvasContext.strokeStyle = strokeStyle;
-				context.canvasContext.strokeRect(x, y, width, height);
+				context.strokeStyle = strokeStyle;
+				context.strokeRect(x, y, width, height);
 			}
 		},
 	);
@@ -139,14 +139,14 @@ export function createTextPainter(
 				fillStyle,
 				strokeStyle,
 			} = settings;
-			context.canvasContext.font = font;
+			context.font = font;
 			if (fillStyle) {
-				context.canvasContext.fillStyle = fillStyle;
-				context.canvasContext.fillText(text, x, y);
+				context.fillStyle = fillStyle;
+				context.fillText(text, x, y);
 			}
 			if (strokeStyle) {
-				context.canvasContext.strokeStyle = strokeStyle;
-				context.canvasContext.strokeText(text, x, y);
+				context.strokeStyle = strokeStyle;
+				context.strokeText(text, x, y);
 			}
 		},
 	);
@@ -164,12 +164,12 @@ export function createPathCallbackPainter(
 			const path = new Path2D();
 			settings.callback(path);
 			if (settings.fillStyle) {
-				context.canvasContext.fillStyle = settings.fillStyle;
-				context.canvasContext.fill();
+				context.fillStyle = settings.fillStyle;
+				context.fill();
 			}
 			if (settings.strokeStyle) {
-				context.canvasContext.strokeStyle = settings.strokeStyle;
-				context.canvasContext.stroke();
+				context.strokeStyle = settings.strokeStyle;
+				context.stroke();
 			}
 		},
 	);

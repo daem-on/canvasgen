@@ -1,10 +1,4 @@
-export type PaintingContext = {
-	canvasContext: CanvasRenderingContext2D;
-	canvasWidth: number;
-	canvasHeight: number;
-};
-
-export type Painter = (context: PaintingContext) => undefined;
+export type Painter = (context: CanvasRenderingContext2D) => undefined;
 
 export class Duration {
 	constructor(public readonly frame: number) {}
@@ -48,6 +42,10 @@ export class Duration {
 	}
 
 	static zero = new Duration(0);
+
+	static fromSeconds(seconds: number, framerate: number): Duration {
+		return new Duration(seconds * framerate);
+	}
 }
 
 export type Animatable<T> = (time: Duration) => T;

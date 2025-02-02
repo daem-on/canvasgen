@@ -28,9 +28,9 @@ function createTextAnimation(
 	settingsAnim: Animation<{ text: string; x: number; y: number }>,
 ): Animation<Painter> {
 	return settingsAnim.derive((settings) => (context) => {
-		context.canvasContext.font = "20px sans-serif";
-		context.canvasContext.fillStyle = "black";
-		context.canvasContext.fillText(settings.text, settings.x, settings.y);
+		context.font = "20px sans-serif";
+		context.fillStyle = "black";
+		context.fillText(settings.text, settings.x, settings.y);
 	});
 }
 
