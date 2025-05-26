@@ -14,11 +14,10 @@ import {
 	TextSettings,
 	tweenNumber,
 } from "./lib/std.ts";
-import { Context2D } from "./lib/types.ts";
 
 function getWordWidths(
 	words: string[],
-	context: Context2D,
+	context: CanvasRenderingContext2D,
 ): number[] {
 	return words.map((word) => context.measureText(word).width);
 }
@@ -55,7 +54,7 @@ function createTextFloatUpAnimation(
 
 function createPerWordFloatUpAnimations(
 	words: string[],
-	context: Context2D,
+	context: CanvasRenderingContext2D,
 	baseX: number,
 	eachAnimSettings: AnimationSettings,
 ): Animation<TextSettings>[] {
@@ -75,19 +74,18 @@ function createPerWordFloatUpAnimations(
 }
 
 export function createTextSceneRenderer(
-	context: Context2D,
+	context: CanvasRenderingContext2D,
 ): Animation<Painter> {
 	return paintAll(fromAnimationArray([
-		createTextPainter(
-			animateTextSlice("Hello, world!", { duration: new Duration(240) })
-				.derive(
-					(text) => ({
-						text,
-						position: { x: 20, y: 20 },
-						fillStyle: "black",
-					}),
-				),
-		),
+		animateTextSlice("Hello, world!", { duration: new Duration(240) })
+			.derive(
+				(text) => ({
+					text,
+					position: { x: 20, y: 20 },
+					fillStyle: "black",
+				}),
+			)
+			.derive(createTextPainter),
 		paintAll(
 			animationStaggered(
 				createPerWordFloatUpAnimations(
@@ -95,7 +93,7 @@ export function createTextSceneRenderer(
 					context,
 					20,
 					{ duration: new Duration(60) },
-				).map((anim) => createTextPainter(anim)),
+				).map((anim) => anim.derive(createTextPainter)),
 			),
 		),
 	]));

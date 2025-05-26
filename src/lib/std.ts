@@ -1,7 +1,10 @@
 import {
 	Animation,
 	AnimationSettings,
+	CallbackAnimation,
+	ConstantAnimation,
 	defineTween,
+	Duration,
 	Lerp,
 	Painter,
 } from "./core.ts";
@@ -19,37 +22,6 @@ export const lerpPoint: Lerp<Point> = (a, b, t) => ({
 
 export const tweenPoint = defineTween(lerpPoint);
 
-export class Color {
-	constructor(public r: number, public g: number, public b: number) {}
-
-	toString() {
-		return `rgb(${this.r}, ${this.g}, ${this.b})`;
-	}
-}
-
-export class HslColor {
-	constructor(
-		public h: number,
-		public s: number,
-		public l: number,
-		public a: number,
-	) {}
-
-	toString() {
-		return `hsla(${this.h}, ${this.s}%, ${this.l}%, ${this.a})`;
-	}
-}
-
-export const lerpHslColor: Lerp<HslColor> = (a, b, t) =>
-	new HslColor(
-		lerpNumber(a.h, b.h, t),
-		lerpNumber(a.s, b.s, t),
-		lerpNumber(a.l, b.l, t),
-		lerpNumber(a.a, b.a, t),
-	);
-
-export const tweenHsvColor = defineTween(lerpHslColor);
-
 export function animateTextSlice(
 	text: string,
 	settings: AnimationSettings,
@@ -65,6 +37,7 @@ export function animateTextSlice(
 export type CommonShapeSettings = {
 	fillStyle?: string;
 	strokeStyle?: string;
+	strokeWidth?: number;
 };
 
 export type CircleSettings = CommonShapeSettings & {
@@ -73,24 +46,22 @@ export type CircleSettings = CommonShapeSettings & {
 };
 
 export function createCirclePainter(
-	settings: Animation<CircleSettings>,
-): Animation<Painter> {
-	return settings.derive(
-		(settings) => (context) => {
-			const { center: { x, y }, radius } = settings;
-			context.beginPath();
-			context.arc(x, y, radius, 0, 2 * Math.PI, false);
-			context.closePath();
-			if (settings.fillStyle) {
-				context.fillStyle = settings.fillStyle;
-				context.fill();
-			}
-			if (settings.strokeStyle) {
-				context.strokeStyle = settings.strokeStyle;
-				context.stroke();
-			}
-		},
-	);
+	settings: CircleSettings,
+): Painter {
+	return (context) => {
+		const { center: { x, y }, radius } = settings;
+		context.beginPath();
+		context.arc(x, y, radius, 0, 2 * Math.PI, false);
+		context.closePath();
+		if (settings.fillStyle) {
+			context.fillStyle = settings.fillStyle;
+			context.fill();
+		}
+		if (settings.strokeStyle) {
+			context.strokeStyle = settings.strokeStyle;
+			context.stroke();
+		}
+	};
 }
 
 export type RectSettings = CommonShapeSettings & {
@@ -98,27 +69,84 @@ export type RectSettings = CommonShapeSettings & {
 	size: Point;
 };
 
+export const lerpRectSettings: Lerp<RectSettings> = (a, b, t) => ({
+	position: lerpPoint(a.position, b.position, t),
+	size: lerpPoint(a.size, b.size, t),
+	fillStyle: a.fillStyle,
+	strokeStyle: a.strokeStyle,
+	strokeWidth: lerpNumber(a.strokeWidth ?? 0, b.strokeWidth ?? 0, t),
+});
+
 export function createRectPainter(
-	settings: Animation<RectSettings>,
-): Animation<Painter> {
-	return settings.derive(
-		(settings) => (context) => {
-			const {
-				position: { x, y },
-				size: { x: width, y: height },
-				fillStyle,
-				strokeStyle,
-			} = settings;
-			if (fillStyle) {
-				context.fillStyle = fillStyle;
-				context.fillRect(x, y, width, height);
-			}
-			if (strokeStyle) {
-				context.strokeStyle = strokeStyle;
-				context.strokeRect(x, y, width, height);
-			}
+	settings: RectSettings,
+): Painter {
+	return (context) => {
+		const {
+			position: { x, y },
+			size: { x: width, y: height },
+			fillStyle,
+			strokeStyle,
+		} = settings;
+		if (fillStyle) {
+			context.fillStyle = fillStyle;
+			context.fillRect(x, y, width, height);
+		}
+		if (strokeStyle) {
+			context.strokeStyle = strokeStyle;
+			context.strokeRect(x, y, width, height);
+		}
+	};
+}
+
+export function inflateRect<T extends RectSettings>(
+	settings: T,
+	amount: Point,
+): T {
+	return {
+		...settings,
+		position: {
+			x: settings.position.x - amount.x,
+			y: settings.position.y - amount.y,
 		},
-	);
+		size: {
+			x: settings.size.x + amount.x * 2,
+			y: settings.size.y + amount.y * 2,
+		},
+	};
+}
+
+export type RRectSettings = RectSettings & {
+	radius: number;
+};
+
+export const lerpRRectSettings: Lerp<RRectSettings> = (a, b, t) => ({
+	...lerpRectSettings(a, b, t),
+	radius: lerpNumber(a.radius, b.radius, t),
+});
+
+export function createRRectPainter(
+	settings: RRectSettings,
+): Painter {
+	return (context) => {
+		const {
+			position: { x, y },
+			size: { x: width, y: height },
+			radius,
+			fillStyle,
+			strokeStyle,
+		} = settings;
+		context.beginPath();
+		context.roundRect(x, y, width, height, radius);
+		context.closePath();
+		if (fillStyle) {
+			context.fillStyle = fillStyle;
+			context.fill();
+		}
+		if (strokeStyle) {
+			context.strokeStyle = strokeStyle;
+			context.stroke();
+		}
+	};
 }
 
 export type TextSettings = CommonShapeSettings & {
@@ -128,50 +156,103 @@ export type TextSettings = CommonShapeSettings & {
 };
 
 export function createTextPainter(
-	settings: Animation<TextSettings>,
-): Animation<Painter> {
-	return settings.derive(
-		(settings) => (context) => {
-			const {
-				text,
-				position: { x, y },
-				font = "20px sans-serif",
-				fillStyle,
-				strokeStyle,
-			} = settings;
-			if (!text.length) return;
-			context.font = font;
-			if (fillStyle) {
-				context.fillStyle = fillStyle;
-				context.fillText(text, x, y);
-			}
-			if (strokeStyle) {
-				context.strokeStyle = strokeStyle;
-				context.strokeText(text, x, y);
-			}
-		},
-	);
+	settings: TextSettings,
+): Painter {
+	return (context) => {
+		const {
+			text,
+			position: { x, y },
+			font = "20px sans-serif",
+			fillStyle,
+			strokeStyle,
+			strokeWidth,
+		} = settings;
+		if (!text.length) return;
+		context.font = font;
+		if (strokeWidth) {
+			context.lineWidth = strokeWidth;
+		}
+		if (strokeStyle) {
+			context.strokeStyle = strokeStyle;
+			context.strokeText(text, x, y);
+		}
+		if (fillStyle) {
+			context.fillStyle = fillStyle;
+			context.fillText(text, x, y);
+		}
+	};
 }
 
-export type PathCallbackSettings = CommonShapeSettings & {
-	callback: (path: Path2D) => void;
+export type ScaleSettings = {
+	origin?: Point;
+	scale: Point;
 };
 
-export function createPathCallbackPainter(
-	settings: Animation<PathCallbackSettings>,
+export function createScalingPainter(
+	settings: ScaleSettings,
+	painter: Painter,
+): Painter {
+	return (context) => {
+		context.save();
+
+		if (settings.origin) {
+			context.translate(settings.origin.x, settings.origin.y);
+		}
+		context.scale(settings.scale.x, settings.scale.y);
+		if (settings.origin) {
+			context.translate(-settings.origin.x, -settings.origin.y);
+		}
+		painter(context);
+
+		context.restore();
+	};
+}
+
+export type ContextTransformSettings = {
+	translate?: Point;
+	origin?: Point;
+	scale?: Point;
+	rotateDegrees?: number;
+};
+
+export function createTransformingPainter(
+	settings: ContextTransformSettings,
+	painter: Painter,
+): Painter {
+	return (context) => {
+		context.save();
+
+		if (settings.translate) {
+			context.translate(settings.translate.x, settings.translate.y);
+		}
+		if (settings.origin) {
+			context.translate(settings.origin.x, settings.origin.y);
+		}
+		if (settings.scale) {
+			context.scale(settings.scale.x, settings.scale.y);
+		}
+		if (settings.rotateDegrees) {
+			context.rotate(settings.rotateDegrees * Math.PI / 180);
+		}
+		if (settings.origin) {
+			context.translate(-settings.origin.x, -settings.origin.y);
+		}
+		painter(context);
+
+		context.restore();
+	};
+}
+
+export const noopPainter: Painter = () => {};
+
+export function startWithEmpty(
+	source: Animation<Painter>,
 ): Animation<Painter> {
-	return settings.derive(
-		(settings) => (context) => {
-			const path = new Path2D();
-			settings.callback(path);
-			if (settings.fillStyle) {
-				context.fillStyle = settings.fillStyle;
-				context.fill();
-			}
-			if (settings.strokeStyle) {
-				context.strokeStyle = settings.strokeStyle;
-				context.stroke();
-			}
-		},
+	return new CallbackAnimation(
+		source.duration,
+		source.strategy,
+		(t) => t.isGreaterThan(Duration.zero) ? source.at(t) : noopPainter,
 	);
 }
+
+export const noopPainterAnim = new ConstantAnimation(noopPainter);

@@ -1,6 +1,4 @@
-import { Context2D } from "./types.ts";
-
-export type Painter = (context: Context2D) => undefined;
+export type Painter = (context: CanvasRenderingContext2D) => void;
 
 export class Duration {
 	constructor(public readonly frame: number) {}
@@ -25,9 +23,13 @@ export class Duration {
 		return this.frame > other.frame;
 	}
 
+	get isZero(): boolean {
+		return this.frame === 0;
+	}
+
 	clamp(min: Duration, max: Duration): Duration {
 		return new Duration(
-			Math.min(max.frame, Math.max(min.frame, this.frame)),
+			Math.max(min.frame, Math.min(max.frame, this.frame)),
 		);
 	}
 
@@ -45,8 +47,8 @@ export class Duration {
 
 	static zero = new Duration(0);
 
-	static fromSeconds(seconds: number, framerate: number): Duration {
-		return new Duration(seconds * framerate);
+	static fromSeconds(seconds: number, frameRate: number): Duration {
+		return new Duration(Math.ceil(seconds * frameRate));
 	}
 }
 
@@ -76,6 +78,13 @@ export const assertTime: TimeTransformStrategy = (animation) => (time) => {
 	}
 	return time;
 };
+
+export const resetToZeroTime: TimeTransformStrategy = (animation) => (time) =>
+	time.isGreaterThan(animation.duration) ? Duration.zero : time;
+
+export const resetToZeroInclusiveTime: TimeTransformStrategy =
+	(animation) => (time) =>
+		time.isLessThan(animation.duration) ? time : Duration.zero;
 
 export abstract class Animation<T> {
 	constructor(
@@ -136,6 +145,11 @@ export type AnimationSettings = {
 	strategy?: TimeTransformStrategy;
 };
 
+export type Timed<T> = {
+	value: T;
+	time: Duration;
+};
+
 export type TweenCreator<T> = (
 	settings: AnimationSettings & {
 		from: T;
@@ -146,10 +160,9 @@ export type TweenCreator<T> = (
 export function defineTween<T>(lerp: Lerp<T>): TweenCreator<T> {
 	return ({ from, to, duration, easing, strategy }) =>
 		new CallbackAnimation(duration, strategy ?? clampTime, (time) => {
-			const animation = easing
-				? easing(time.dividedBy(duration))
-				: time.dividedBy(duration);
-			return lerp(from, to, animation);
+			const animation = duration.isZero ? 1 : time.dividedBy(duration);
+			const easedAnimation = easing ? easing(animation) : animation;
+			return lerp(from, to, easedAnimation);
 		});
 }
 
@@ -229,6 +242,22 @@ export function animationSequence<T>(
 	});
 }
 
+export function animationSwitch<T>(
+	end: Duration,
+	timedAnimations: Timed<Animation<T>>[],
+	strategy = clampTime,
+): Animation<T> {
+	return new CallbackAnimation(end, strategy, (time) => {
+		const index = timedAnimations.findIndex((anim) =>
+			anim.time.isGreaterThan(time)
+		);
+		const current = index == -1
+			? timedAnimations.at(-1)
+			: timedAnimations.at(index - 1);
+		return current!.value.at(time.subtract(current!.time));
+	});
+}
+
 export function paintAll(painters: Animation<Painter[]>): Animation<Painter> {
 	return painters.derive((value) => (context) => {
 		for (const painter of value) painter(context);
@@ -238,6 +267,22 @@ export function paintAll(painters: Animation<Painter[]>): Animation<Painter> {
 function windowBetween(from: Duration, to: Duration): TimeTransform {
 	return (time: Duration) =>
 		time.subtract(from).clamp(Duration.zero, to.subtract(from));
+}
+
+export function animationWindowed<T>(
+	timedAnimations: Timed<Animation<T>>[],
+	strategy = clampTime,
+): Animation<T[]> {
+	const lastAnim = timedAnimations.at(-1);
+	const endTime = lastAnim?.time.add(lastAnim.value.duration) ?? Duration.zero;
+	const windows = timedAnimations.map((anim) =>
+		windowBetween(anim.time, anim.time.add(anim.value.duration))
+	);
+	return new CallbackAnimation(endTime, strategy, (time) => {
+		return timedAnimations.map((anim, index) =>
+			anim.value.at(windows[index](time))
+		);
+	});
 }
 
 export function animationStaggered<T>(
@@ -258,4 +303,46 @@ export function animationStaggered<T>(
 	return new CallbackAnimation(totalDuration, strategy, (time) => {
 		return animations.map((anim, index) => anim.at(windows[index](time)));
 	});
+}
+
+export function fillToFrames<T>(
+	end: Duration,
+	timedAnimations: Timed<Animation<T>>[],
+): Animation<T>[] {
+	return timedAnimations.map((element, i) => {
+		const nextStart = timedAnimations.at(i + 1)?.time ?? end;
+		const difference = Duration.max(
+			nextStart.subtract(element.time.add(element.value.duration)),
+			Duration.zero,
+		);
+		return element.value.extend({
+			before: Duration.zero,
+			after: difference,
+		});
+	});
+}
+
+export function animationFromKeyframes<T>(
+	keyframes: Timed<T>[],
+	lerp: Lerp<T>,
+	easing: (input: number) => number,
+	sequenceStrategy = clampTime,
+): Animation<T> {
+	const tweenValue = defineTween(lerp);
+	return animationSequence<T>(
+		keyframes.map((keyframe, i) => {
+			const nextKeyframe = keyframes[i + 1];
+			if (nextKeyframe === undefined) {
+				return new ConstantAnimation(keyframe.value);
+			}
+			const duration = nextKeyframe.time.subtract(keyframe.time);
+			return tweenValue({
+				from: keyframe.value,
+				to: nextKeyframe.value,
+				duration,
+				easing,
+			});
+		}),
+		sequenceStrategy,
+	);
 }
