@@ -2,11 +2,13 @@ import {
 	Animation,
 	AnimationSettings,
 	CallbackAnimation,
+	clampTime,
 	ConstantAnimation,
 	defineTween,
 	Duration,
 	Lerp,
 	Painter,
+	Timed,
 } from "./core.ts";
 
 export const lerpNumber: Lerp<number> = (a, b, t) => a + (b - a) * t;
@@ -32,6 +34,29 @@ export function animateTextSlice(
 		...settings,
 	});
 	return textAnimation.derive((length) => text.slice(0, Math.floor(length)));
+}
+
+export function painterAnimationWindowed(
+	timedAnimations: Timed<Animation<Painter>>[],
+	strategy = clampTime,
+): Animation<Painter> {
+	const endTime = timedAnimations.reduce(
+		(acc, { time, value }) => Duration.max(acc, time.add(value.duration)),
+		Duration.zero,
+	);
+
+	return new CallbackAnimation(endTime, strategy, (currentTime) => {
+		const activePainters = timedAnimations.filter(
+			({ time, value }) =>
+				!currentTime.isLessThan(time) &&
+				!currentTime.isGreaterThan(time.add(value.duration)),
+		).map(({ time, value }) => value.at(currentTime.subtract(time)));
+		return (context) => {
+			for (const painter of activePainters) {
+				painter(context);
+			}
+		};
+	});
 }
 
 export type CommonShapeSettings = {
@@ -111,6 +136,28 @@ export function inflateRect<T extends RectSettings>(
 		size: {
 			x: settings.size.x + amount.x * 2,
 			y: settings.size.y + amount.y * 2,
+		},
+	};
+}
+
+export function scaleRectAroundCenter<T extends RectSettings>(
+	settings: T,
+	scale: number,
+): T {
+	const centerX = settings.position.x + settings.size.x / 2;
+	const centerY = settings.position.y + settings.size.y / 2;
+	const newWidth = settings.size.x * scale;
+	const newHeight = settings.size.y * scale;
+
+	return {
+		...settings,
+		position: {
+			x: centerX - newWidth / 2,
+			y: centerY - newHeight / 2,
+		},
+		size: {
+			x: newWidth,
+			y: newHeight,
 		},
 	};
 }

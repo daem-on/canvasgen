@@ -32,5 +32,15 @@ export const easings = {
 		return input < 0.5
 			? (Math.pow(2 * input, 2) * ((c2 + 1) * 2 * input - c2)) / 2
 			: (Math.pow(2 * input - 2, 2) * ((c2 + 1) * (input * 2 - 2) + c2) + 2) / 2;
-	}
+	},
+	easeInCubic: (input: number) => input * input * input,
+	easeOutCubic: (input: number) => 1 - Math.pow(1 - input, 3),
+	easeInOutCubic: (input: number) => input < 0.5
+		? 4 * input * input * input
+		: 1 - Math.pow(-2 * input + 2, 3) / 2,
+	easeInQuart: (input: number) => input * input * input * input,
+	easeOutQuart: (input: number) => 1 - Math.pow(1 - input, 4),
+	easeInOutQuart: (input: number) => input < 0.5
+		? 8 * input * input * input * input
+		: 1 - Math.pow(-2 * input + 2, 4) / 2,
 };

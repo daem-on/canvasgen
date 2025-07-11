@@ -30,8 +30,21 @@ export function hslaToString(color: HslaColor): string {
 	return `hsla(${color.h}, ${color.s}%, ${color.l}%, ${color.a})`;
 }
 
+function lerpWrappingNumber(
+	a: number,
+	b: number,
+	animation: number,
+	wrapAt: number,
+): number {
+	if (Math.abs(b - a) > wrapAt / 2) {
+		if (a < b) a += wrapAt;
+		else b += wrapAt;
+	}
+	return lerpNumber(a, b, animation);
+}
+
 export const lerpHslaColor: Lerp<HslaColor> = (a, b, t) => ({
-	h: lerpNumber(a.h, b.h, t),
+	h: lerpWrappingNumber(a.h, b.h, t, 360),
 	s: lerpNumber(a.s, b.s, t),
 	l: lerpNumber(a.l, b.l, t),
 	a: lerpNumber(a.a, b.a, t),
@@ -90,4 +103,39 @@ export function hexToRgbaColor(color: string): RgbaColor {
 	a = a / 255;
 
 	return { r, g, b, a };
+}
+
+export function rgbaToHsla(rgba: RgbaColor): HslaColor {
+	const { a } = rgba;
+	const r = rgba.r / 255;
+	const g = rgba.g / 255;
+	const b = rgba.b / 255;
+	const max = Math.max(r, g, b);
+	const min = Math.min(r, g, b);
+	let h: number;
+	let s: number;
+	const l = (max + min) / 2;
+
+	if (max === min) {
+		h = 0; // achromatic
+		s = 0;
+	} else {
+		const d = max - min;
+		s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+		switch (max) {
+			case r:
+				h = (g - b) / d + (g < b ? 6 : 0);
+				break;
+			case g:
+				h = (b - r) / d + 2;
+				break;
+			case b:
+				h = (r - g) / d + 4;
+				break;
+		}
+		h = h!;
+		h /= 6; // normalize to [0, 1]
+	}
+
+	return { h: h * 360, s: s * 100, l: l * 100, a };
 }
