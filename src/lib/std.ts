@@ -2,13 +2,11 @@ import {
 	Animation,
 	AnimationSettings,
 	CallbackAnimation,
-	clampTime,
 	ConstantAnimation,
 	defineTween,
 	Duration,
 	Lerp,
 	Painter,
-	Timed,
 } from "./core.ts";
 
 export const lerpNumber: Lerp<number> = (a, b, t) => a + (b - a) * t;
@@ -34,29 +32,6 @@ export function animateTextSlice(
 		...settings,
 	});
 	return textAnimation.derive((length) => text.slice(0, Math.floor(length)));
-}
-
-export function painterAnimationWindowed(
-	timedAnimations: Timed<Animation<Painter>>[],
-	strategy = clampTime,
-): Animation<Painter> {
-	const endTime = timedAnimations.reduce(
-		(acc, { time, value }) => Duration.max(acc, time.add(value.duration)),
-		Duration.zero,
-	);
-
-	return new CallbackAnimation(endTime, strategy, (currentTime) => {
-		const activePainters = timedAnimations.filter(
-			({ time, value }) =>
-				!currentTime.isLessThan(time) &&
-				!currentTime.isGreaterThan(time.add(value.duration)),
-		).map(({ time, value }) => value.at(currentTime.subtract(time)));
-		return (context) => {
-			for (const painter of activePainters) {
-				painter(context);
-			}
-		};
-	});
 }
 
 export type CommonShapeSettings = {
@@ -299,6 +274,10 @@ export function startWithEmpty(
 		source.duration,
 		source.strategy,
 		(t) => t.isGreaterThan(Duration.zero) ? source.at(t) : noopPainter,
+		(a, b) =>
+			a.isEqualTo(b) ||
+			(a.isLessThan(Duration.zero) && b.isLessThan(Duration.zero)) ||
+			source.isSameAt(a, b),
 	);
 }
 

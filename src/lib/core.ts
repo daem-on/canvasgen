@@ -53,6 +53,10 @@ export class Duration {
 		return new Duration((this.frame % max.frame + max.frame) % max.frame);
 	}
 
+	isEqualTo(other: Duration): boolean {
+		return this.frame === other.frame;
+	}
+
 	static min(a: Duration, b: Duration): Duration {
 		return new Duration(Math.min(a.frame, b.frame));
 	}
@@ -144,16 +148,18 @@ export abstract class Animation<T> {
 	abstract at(time: Duration): T;
 
 	/**
+	 * For optimization: returns true when it is certain that the animation
+	 * evaluates to the same value for the two inputs given.
+	 */
+	abstract isSameAt(a: Duration, b: Duration): boolean;
+
+	/**
 	 * Creates a new animation based on this one. When the new animation is
 	 * evaluated at `t`, it will return the value of the old animation at `t`
 	 * transformed by the given `callback`.
 	 */
 	derive<U>(callback: (value: T) => U): Animation<U> {
-		return new CallbackAnimation(
-			this.duration,
-			this.strategy,
-			(time) => callback(this.at(time)),
-		);
+		return new DerivedAnimation(this, callback);
 	}
 
 	/**
@@ -172,23 +178,65 @@ export abstract class Animation<T> {
 	}
 }
 
+export abstract class TransformingAnimation<T> extends Animation<T> {
+	protected transform = this.strategy(this);
+
+	abstract atTransformed(transformedTime: Duration): T;
+
+	at(time: Duration): T {
+		return this.atTransformed(this.transform(time));
+	}
+
+	isSameAtTransformed(_a: Duration, _b: Duration): boolean {
+		return false;
+	}
+
+	isSameAt(a: Duration, b: Duration): boolean {
+		const actualA = this.transform(a);
+		const actualB = this.transform(b);
+		if (actualA.isEqualTo(actualB)) return true;
+		return this.isSameAtTransformed(actualA, actualB);
+	}
+}
+
+export class DerivedAnimation<T, U> extends TransformingAnimation<U> {
+	constructor(
+		private readonly source: Animation<T>,
+		private readonly callback: (value: T) => U,
+	) {
+		super(source.duration, source.strategy);
+	}
+
+	override atTransformed(time: Duration): U {
+		return this.callback(this.source.at(time));
+	}
+
+	override isSameAtTransformed(a: Duration, b: Duration): boolean {
+		return this.source.isSameAt(a, b);
+	}
+}
+
 /**
  * An `Animation` which delegates the evaluation of its value
  * to a callback function.
  */
-export class CallbackAnimation<T> extends Animation<T> {
-	private transform = this.strategy(this);
-
+export class CallbackAnimation<T> extends TransformingAnimation<T> {
 	constructor(
 		duration: Duration,
 		strategy: TimeTransformStrategy,
 		private readonly callback: Animatable<T>,
+		private readonly sameAtCallback?: (a: Duration, b: Duration) => boolean,
 	) {
 		super(duration, strategy);
 	}
 
-	at(time: Duration): T {
+	atTransformed(time: Duration): T {
 		return this.callback(this.transform(time));
+	}
+
+	override isSameAtTransformed(a: Duration, b: Duration): boolean {
+		if (this.sameAtCallback) return this.sameAtCallback(a, b);
+		return false;
 	}
 }
 
@@ -200,6 +248,10 @@ export class ConstantAnimation<T> extends Animation<T> {
 
 	at(): T {
 		return this.value;
+	}
+
+	isSameAt(): boolean {
+		return true;
 	}
 }
 
@@ -226,6 +278,25 @@ export type TweenCreator<T> = (
 	},
 ) => Animation<T>;
 
+class Tween<T> extends TransformingAnimation<T> {
+	constructor(
+		private readonly lerp: Lerp<T>,
+		private readonly from: T,
+		private readonly to: T,
+		duration: Duration,
+		private easing?: (input: number) => number,
+		strategy = clampTime,
+	) {
+		super(duration, strategy);
+	}
+
+	atTransformed(time: Duration): T {
+		const animation = this.duration.isZero ? 1 : time.dividedBy(this.duration);
+		const easedAnimation = this.easing ? this.easing(animation) : animation;
+		return this.lerp(this.from, this.to, easedAnimation);
+	}
+}
+
 /**
  * Creates a `TweenCreator` based on a `lerp` function that defines how to
  * to linearly interpolate values of type `T`. The creator can then be used
@@ -233,11 +304,7 @@ export type TweenCreator<T> = (
  */
 export function defineTween<T>(lerp: Lerp<T>): TweenCreator<T> {
 	return ({ from, to, duration, easing, strategy }) =>
-		new CallbackAnimation(duration, strategy ?? clampTime, (time) => {
-			const animation = duration.isZero ? 1 : time.dividedBy(duration);
-			const easedAnimation = easing ? easing(animation) : animation;
-			return lerp(from, to, easedAnimation);
-		});
+		new Tween(lerp, from, to, duration, easing, strategy);
 }
 
 /** Creates a constant function. */
@@ -286,76 +353,100 @@ export function fromAnimationProperties<T extends object>(
 }
 
 /**
- * Creates an `Animation` which evaluates to an array of values produced by
+ * An `Animation` which evaluates to an array of values produced by
  * evaluating the `Animation`s given in `source`.
  */
-export function fromAnimationArray<T>(
-	source: Animation<T>[],
-	strategy = clampTime,
-): Animation<T[]> {
-	const duration = source.reduce(
-		(max, anim) => Duration.max(max, anim.duration),
-		Duration.zero,
-	);
-	return new CallbackAnimation(
-		duration,
-		strategy,
-		(time) => source.map((anim) => anim.at(time)),
-	);
+export class ArrayAnimation<T> extends TransformingAnimation<T[]> {
+	constructor(
+		private readonly source: Animation<T>[],
+		strategy = clampTime,
+	) {
+		const duration = source.reduce(
+			(max, anim) => Duration.max(max, anim.duration),
+			Duration.zero,
+		);
+		super(duration, strategy);
+	}
+
+	atTransformed(time: Duration): T[] {
+		return this.source.map((anim) => anim.at(this.transform(time)));
+	}
+
+	override isSameAtTransformed(a: Duration, b: Duration): boolean {
+		return this.source.every((anim) => anim.isSameAt(a, b));
+	}
 }
 
 /**
- * Creates an `Animation` which evaluates the given `animations` in sequence,
+ * An `Animation` which evaluates the given `animations` in sequence,
  * each animation being evaluated for its own duration, and their input time
  * being inside their bounds (all animations starting from zero).
  */
-export function animationSequence<T>(
-	animations: Animation<T>[],
-	strategy = clampTime,
-): Animation<T> {
-	const totalDuration = animations.reduce(
-		(sum, anim) => sum.add(anim.duration),
-		Duration.zero,
-	);
-	return new CallbackAnimation(totalDuration, strategy, (time) => {
+export class SequenceAnimation<T> extends TransformingAnimation<T> {
+	constructor(
+		private readonly animations: Animation<T>[],
+		strategy = clampTime,
+	) {
+		const totalDuration = animations.reduce(
+			(sum, anim) => sum.add(anim.duration),
+			Duration.zero,
+		);
+		super(totalDuration, strategy);
+	}
+
+	atTransformed(time: Duration): T {
 		let nextStart = Duration.zero;
-		for (const anim of animations) {
+		for (const anim of this.animations) {
 			nextStart = nextStart.add(anim.duration);
 			if (time.isLessThan(nextStart)) {
-				return anim.at(
-					time.subtract(nextStart.subtract(anim.duration)),
-				);
+				return anim.at(time.subtract(nextStart.subtract(anim.duration)));
 			}
 		}
-		const lastAnim = animations[animations.length - 1];
-		return lastAnim.at(
-			time.subtract(nextStart.subtract(lastAnim.duration)),
-		);
-	});
+		const lastAnim = this.animations[this.animations.length - 1];
+		return lastAnim.at(time.subtract(nextStart.subtract(lastAnim.duration)));
+	}
 }
 
 /**
- * Creates an `Animation` based on a list of `Animation`s with start times.
+ * An `Animation` based on a list of `Animation`s with start times.
  * It always evaluates the "current" animation, which at any given time is the
- * first in the list with a lower start time.
+ * last in the list with a lower start time.
  *
  * @param timedAnimations A list of animations with start times, should be
  * sorted by start time.
  */
-export function animationSwitch<T>(
-	end: Duration,
-	timedAnimations: Timed<Animation<T>>[],
-	strategy = clampTime,
-): Animation<T> {
-	return new CallbackAnimation(end, strategy, (time) => {
-		const index = timedAnimations.findIndex((anim) =>
+export class SwitchAnimation<T> extends TransformingAnimation<T> {
+	constructor(
+		end: Duration,
+		private readonly timedAnimations: Timed<Animation<T>>[],
+		strategy = clampTime,
+	) {
+		super(end, strategy);
+	}
+
+	private getAnimAt(time: Duration): Timed<Animation<T>> {
+		const index = this.timedAnimations.findIndex((anim) =>
 			anim.time.isGreaterThan(time)
 		);
-		const current = index == -1
-			? timedAnimations.at(-1)
-			: timedAnimations.at(index - 1);
-		return current!.value.at(time.subtract(current!.time));
-	});
+		return index == -1
+			? this.timedAnimations.at(-1)!
+			: this.timedAnimations.at(index - 1)!;
+	}
+
+	atTransformed(time: Duration): T {
+		const current = this.getAnimAt(time);
+		return current.value.at(time.subtract(current.time));
+	}
+
+	override isSameAt(a: Duration, b: Duration): boolean {
+		const animA = this.getAnimAt(a);
+		const animB = this.getAnimAt(b);
+		if (animA !== animB) return false;
+		return animA.value.isSameAt(
+			a.subtract(animA.time),
+			b.subtract(animA.time),
+		);
+	}
 }
 
 /**
@@ -374,7 +465,7 @@ function windowBetween(from: Duration, to: Duration): TimeTransform {
 }
 
 /**
- * Creates an `Animation` which evaluates to a list of values produced
+ * An `Animation` which evaluates to a list of values produced
  * by evaluating `animation`s given in `timedAnimations`, but offset from
  * each other in time.
  *
@@ -387,24 +478,38 @@ function windowBetween(from: Duration, to: Duration): TimeTransform {
  * @param timedAnimations A list of animations with start times, should be
  * sorted by start time.
  */
-export function animationWindowed<T>(
-	timedAnimations: Timed<Animation<T>>[],
-	strategy = clampTime,
-): Animation<T[]> {
-	const lastAnim = timedAnimations.at(-1);
-	const endTime = lastAnim?.time.add(lastAnim.value.duration) ?? Duration.zero;
-	const windows = timedAnimations.map((anim) =>
-		windowBetween(anim.time, anim.time.add(anim.value.duration))
-	);
-	return new CallbackAnimation(endTime, strategy, (time) => {
-		return timedAnimations.map((anim, index) =>
-			anim.value.at(windows[index](time))
+export class WindowedAnimation<T> extends TransformingAnimation<T[]> {
+	private readonly windows: TimeTransform[];
+
+	constructor(
+		private readonly timedAnimations: Timed<Animation<T>>[],
+		strategy = clampTime,
+	) {
+		const lastAnim = timedAnimations.at(-1);
+		const endTime = lastAnim?.time.add(lastAnim.value.duration) ??
+			Duration.zero;
+		super(endTime, strategy);
+		this.windows = timedAnimations.map((anim) =>
+			windowBetween(anim.time, anim.time.add(anim.value.duration))
 		);
-	});
+	}
+
+	atTransformed(time: Duration): T[] {
+		return this.timedAnimations.map((anim, index) =>
+			anim.value.at(this.windows[index](time))
+		);
+	}
+
+	override isSameAt(a: Duration, b: Duration): boolean {
+		if (a.isEqualTo(b)) return true;
+		return this.timedAnimations.every((anim, index) =>
+			anim.value.isSameAt(this.windows[index](a), this.windows[index](b))
+		);
+	}
 }
 
 /**
- * Creates an `Animation` which evaluates to a list of values produced
+ * An `Animation` which evaluates to a list of values produced
  * by evaluating the list of `animations`, in a sequence where each animation
  * lasts for its duration.
  *
@@ -412,24 +517,39 @@ export function animationWindowed<T>(
  * of an animation its input time will be clamped to the bounds of that
  * animation.
  */
-export function animationStaggered<T>(
-	animations: Animation<T>[],
-	strategy = clampTime,
-): Animation<T[]> {
-	const durations = [...animations.map((anim) => anim.duration)];
-	const totalDuration = durations.reduce(
-		(sum, duration) => sum.add(duration),
-		Duration.zero,
-	);
-	let nextStart = Duration.zero;
-	const windows = durations.map((duration) => {
-		const result = windowBetween(nextStart, nextStart.add(duration));
-		nextStart = nextStart.add(duration);
-		return result;
-	});
-	return new CallbackAnimation(totalDuration, strategy, (time) => {
-		return animations.map((anim, index) => anim.at(windows[index](time)));
-	});
+export class StaggeredAnimation<T> extends TransformingAnimation<T[]> {
+	private readonly windows: TimeTransform[];
+
+	constructor(
+		private readonly animations: Animation<T>[],
+		strategy = clampTime,
+	) {
+		const durations = [...animations.map((anim) => anim.duration)];
+		const totalDuration = durations.reduce(
+			(sum, duration) => sum.add(duration),
+			Duration.zero,
+		);
+		super(totalDuration, strategy);
+		let nextStart = Duration.zero;
+		this.windows = durations.map((duration) => {
+			const result = windowBetween(nextStart, nextStart.add(duration));
+			nextStart = nextStart.add(duration);
+			return result;
+		});
+	}
+
+	atTransformed(time: Duration): T[] {
+		return this.animations.map((anim, index) =>
+			anim.at(this.windows[index](time))
+		);
+	}
+
+	override isSameAt(a: Duration, b: Duration): boolean {
+		if (a.isEqualTo(b)) return true;
+		return this.animations.every((anim, index) =>
+			anim.isSameAt(this.windows[index](a), this.windows[index](b))
+		);
+	}
 }
 
 /**
@@ -475,7 +595,7 @@ export function animationFromKeyframes<T>(
 	sequenceStrategy = clampTime,
 ): Animation<T> {
 	const tweenValue = defineTween(lerp);
-	return animationSequence<T>(
+	return new SequenceAnimation<T>(
 		keyframes.map((keyframe, i) => {
 			const nextKeyframe = keyframes[i + 1];
 			if (nextKeyframe === undefined) {
