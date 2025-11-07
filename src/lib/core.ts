@@ -65,7 +65,7 @@ export class Duration {
 		return new Duration(Math.max(a.frame, b.frame));
 	}
 
-	static zero = new Duration(0);
+	static zero: Duration = new Duration(0);
 
 	static fromSeconds(seconds: number, frameRate: number): Duration {
 		return new Duration(Math.ceil(seconds * frameRate));
@@ -168,7 +168,7 @@ export abstract class Animation<T> {
 	 */
 	extend(
 		padding: { before: Duration; after: Duration },
-		strategy = this.strategy,
+		strategy: TimeTransformStrategy = this.strategy,
 	): Animation<T> {
 		return new CallbackAnimation(
 			this.duration.add(padding.before).add(padding.after),
@@ -179,7 +179,7 @@ export abstract class Animation<T> {
 }
 
 export abstract class TransformingAnimation<T> extends Animation<T> {
-	protected transform = this.strategy(this);
+	protected transform: TimeTransform = this.strategy(this);
 
 	abstract atTransformed(transformedTime: Duration): T;
 
@@ -242,7 +242,7 @@ export class CallbackAnimation<T> extends TransformingAnimation<T> {
 
 /** An `Animation` which always evaluates to its `value`, no matter the time. */
 export class ConstantAnimation<T> extends Animation<T> {
-	constructor(private readonly value: T, duration = Duration.zero) {
+	constructor(private readonly value: T, duration: Duration = Duration.zero) {
 		super(duration, delegateTime);
 	}
 
@@ -285,7 +285,7 @@ class Tween<T> extends TransformingAnimation<T> {
 		private readonly to: T,
 		duration: Duration,
 		private easing?: (input: number) => number,
-		strategy = clampTime,
+		strategy: TimeTransformStrategy = clampTime,
 	) {
 		super(duration, strategy);
 	}
@@ -335,7 +335,7 @@ export function fromAnimatableProperties<T extends object>(
  */
 export function fromAnimationProperties<T extends object>(
 	source: { [k in keyof T]: Animation<T[k]> },
-	strategy = clampTime,
+	strategy: TimeTransformStrategy = clampTime,
 ): Animation<T> {
 	const keys = Object.keys(source) as (keyof T)[];
 	const duration = keys.reduce(
@@ -359,7 +359,7 @@ export function fromAnimationProperties<T extends object>(
 export class ArrayAnimation<T> extends TransformingAnimation<T[]> {
 	constructor(
 		private readonly source: Animation<T>[],
-		strategy = clampTime,
+		strategy: TimeTransformStrategy = clampTime,
 	) {
 		const duration = source.reduce(
 			(max, anim) => Duration.max(max, anim.duration),
@@ -385,7 +385,7 @@ export class ArrayAnimation<T> extends TransformingAnimation<T[]> {
 export class SequenceAnimation<T> extends TransformingAnimation<T> {
 	constructor(
 		private readonly animations: Animation<T>[],
-		strategy = clampTime,
+		strategy: TimeTransformStrategy = clampTime,
 	) {
 		const totalDuration = animations.reduce(
 			(sum, anim) => sum.add(anim.duration),
@@ -419,7 +419,7 @@ export class SwitchAnimation<T> extends TransformingAnimation<T> {
 	constructor(
 		end: Duration,
 		private readonly timedAnimations: Timed<Animation<T>>[],
-		strategy = clampTime,
+		strategy: TimeTransformStrategy = clampTime,
 	) {
 		super(end, strategy);
 	}
@@ -483,10 +483,11 @@ export class WindowedAnimation<T> extends TransformingAnimation<T[]> {
 
 	constructor(
 		private readonly timedAnimations: Timed<Animation<T>>[],
-		strategy = clampTime,
+		duration?: Duration,
+		strategy: TimeTransformStrategy = clampTime,
 	) {
 		const lastAnim = timedAnimations.at(-1);
-		const endTime = lastAnim?.time.add(lastAnim.value.duration) ??
+		const endTime = duration ?? lastAnim?.time.add(lastAnim.value.duration) ??
 			Duration.zero;
 		super(endTime, strategy);
 		this.windows = timedAnimations.map((anim) =>
@@ -522,7 +523,7 @@ export class StaggeredAnimation<T> extends TransformingAnimation<T[]> {
 
 	constructor(
 		private readonly animations: Animation<T>[],
-		strategy = clampTime,
+		strategy: TimeTransformStrategy = clampTime,
 	) {
 		const durations = [...animations.map((anim) => anim.duration)];
 		const totalDuration = durations.reduce(
@@ -592,7 +593,7 @@ export function animationFromKeyframes<T>(
 	keyframes: Timed<T>[],
 	lerp: Lerp<T>,
 	easing: (input: number) => number,
-	sequenceStrategy = clampTime,
+	sequenceStrategy: TimeTransformStrategy = clampTime,
 ): Animation<T> {
 	const tweenValue = defineTween(lerp);
 	return new SequenceAnimation<T>(

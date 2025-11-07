@@ -7,11 +7,13 @@ import {
 	Duration,
 	Lerp,
 	Painter,
+	resetToZeroInclusiveTime,
+	TweenCreator,
 } from "./core.ts";
 
 export const lerpNumber: Lerp<number> = (a, b, t) => a + (b - a) * t;
 
-export const tweenNumber = defineTween(lerpNumber);
+export const tweenNumber: TweenCreator<number> = defineTween(lerpNumber);
 
 export type Point = { x: number; y: number };
 
@@ -20,7 +22,7 @@ export const lerpPoint: Lerp<Point> = (a, b, t) => ({
 	y: lerpNumber(a.y, b.y, t),
 });
 
-export const tweenPoint = defineTween(lerpPoint);
+export const tweenPoint: TweenCreator<Point> = defineTween(lerpPoint);
 
 export function animateTextSlice(
 	text: string,
@@ -134,6 +136,40 @@ export function scaleRectAroundCenter<T extends RectSettings>(
 			x: newWidth,
 			y: newHeight,
 		},
+	};
+}
+
+export function splitRectHoriziontal<T extends RectSettings>(
+	settings: T,
+	ratio: number,
+): [T, T] {
+	const clampedRatio = Math.max(0, Math.min(1, ratio));
+	const leftWidth = settings.size.x * clampedRatio;
+	const rightWidth = settings.size.x - leftWidth;
+	return [
+		{
+			...settings,
+			size: { x: leftWidth, y: settings.size.y },
+		},
+		{
+			...settings,
+			position: { x: settings.position.x + leftWidth, y: settings.position.y },
+			size: { x: rightWidth, y: settings.size.y },
+		},
+	];
+}
+
+export function createClippingPainter(
+	rect: RectSettings,
+	basePainter: Painter,
+): Painter {
+	return (context) => {
+		context.save();
+		context.beginPath();
+		context.rect(rect.position.x, rect.position.y, rect.size.x, rect.size.y);
+		context.clip();
+		basePainter(context);
+		context.restore();
 	};
 }
 
@@ -274,11 +310,29 @@ export function startWithEmpty(
 		source.duration,
 		source.strategy,
 		(t) => t.isGreaterThan(Duration.zero) ? source.at(t) : noopPainter,
-		(a, b) =>
-			a.isEqualTo(b) ||
-			(a.isLessThan(Duration.zero) && b.isLessThan(Duration.zero)) ||
-			source.isSameAt(a, b),
+		(a, b) => {
+			if (a.isEqualTo(b)) return true;
+			const isAZero = !a.isGreaterThan(Duration.zero);
+			const isBZero = !b.isGreaterThan(Duration.zero);
+			if (isAZero && isBZero) return true;
+			else if (isAZero || isBZero) return false;
+			return source.isSameAt(a, b);
+		},
 	);
 }
 
-export const noopPainterAnim = new ConstantAnimation(noopPainter);
+export function surroundWithEmpty(
+	source: Animation<Painter>,
+	duration: Duration,
+): Animation<Painter> {
+	return startWithEmpty(
+		source.extend({
+			before: Duration.zero,
+			after: duration.subtract(source.duration),
+		}, resetToZeroInclusiveTime),
+	);
+}
+
+export const noopPainterAnim: Animation<Painter> = new ConstantAnimation(
+	noopPainter,
+);
