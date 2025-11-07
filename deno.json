@@ -3,7 +3,8 @@
 		"lib": [
 			"ES2022",
 			"DOM",
-			"DOM.Iterable"
+			"DOM.Iterable",
+			"deno.ns"
 		],
 		"strict": true,
 		"noUnusedLocals": true,
@@ -15,7 +16,7 @@
 	},
 	"tasks": {
 		"render": {
-			"command": "deno --allow-env --allow-ffi --allow-read --allow-write server/main.ts"
+			"command": "deno --allow-env --allow-ffi --allow-read --allow-sys --allow-run server/main.ts"
 		}
 	}
 }

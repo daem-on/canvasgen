@@ -24,4 +24,4 @@ dist-ssr
 *.sw?
 
 # Example outputs
-*.g.png
+*.g.*

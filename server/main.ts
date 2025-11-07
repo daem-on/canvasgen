@@ -1,9 +1,9 @@
-import { Canvas } from "jsr:@gfx/canvas";
+import { Canvas } from "npm:@napi-rs/canvas";
 import { Duration } from "../src/lib/core.ts";
 import { createTextSceneRenderer } from "../src/text-scene.ts";
 
 const canvas = new Canvas(300, 300);
-const canvasContext = canvas.getContext("2d")!;
+const canvasContext = canvas.getContext("2d") as unknown as CanvasRenderingContext2D;
 
 const renderTextScene = createTextSceneRenderer(canvasContext);
 
@@ -13,6 +13,19 @@ function render(frame: number) {
 	painter(canvasContext);
 }
 
-render(80);
+const command = new Deno.Command("ffmpeg", {
+	args: ["-f", "rawvideo", "-s", "300x300", "-r", "60", "-pix_fmt", "rgba", "-i", "-", "-y", "text-scene.g.mp4"],
+	stdin: 'piped',
+});
 
-canvas.save("text-scene-80.g.png");
+const child = command.spawn();
+
+const writer = child.stdin.getWriter();
+
+for (let i = 0; i < renderTextScene.duration.frame + 1; i++) {
+	render(i);
+	await writer.write(canvas.data());
+}
+
+await writer.close();
+await child.output();

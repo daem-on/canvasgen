@@ -1,13 +1,13 @@
 import {
 	Animation,
-	animationSequence,
-	animationStaggered,
+	ArrayAnimation,
 	ConstantAnimation,
 	Duration,
-	fromAnimationArray,
 	fromAnimationProperties,
 	paintAll,
 	Painter,
+	SequenceAnimation,
+	StaggeredAnimation,
 } from "./lib/core.ts";
 import { easings } from "./lib/easings.ts";
 import {
@@ -17,7 +17,7 @@ import {
 	tweenPoint,
 } from "./lib/std.ts";
 
-const noop: Painter = () => {};
+const noop: Painter = () => { };
 
 function createColorHueAnimation(duration: Duration): Animation<string> {
 	const hueAnim = tweenNumber({ from: 0, to: 360, duration });
@@ -34,16 +34,15 @@ function createTextAnimation(
 	});
 }
 
-const renderRect = createRectPainter(
-	createColorHueAnimation(new Duration(120)).derive((fillStyle) => ({
+const renderRect = createColorHueAnimation(new Duration(120))
+	.derive((fillStyle) => createRectPainter({
 		position: { x: 0, y: 0 },
 		size: { x: 300, y: 20 },
 		fillStyle,
-	})),
-);
+	}));
 
-const renderCircles = paintAll(animationStaggered([
-	createCirclePainter(fromAnimationProperties({
+const renderCircles = paintAll(new StaggeredAnimation([
+	fromAnimationProperties({
 		center: tweenPoint({
 			from: { x: 20, y: 20 },
 			to: { x: 280, y: 20 },
@@ -52,8 +51,8 @@ const renderCircles = paintAll(animationStaggered([
 		}),
 		radius: new ConstantAnimation(20),
 		fillStyle: new ConstantAnimation("blue"),
-	})),
-	createCirclePainter(fromAnimationProperties({
+	}).derive(createCirclePainter),
+	fromAnimationProperties({
 		center: fromAnimationProperties({
 			x: tweenNumber({
 				from: 20,
@@ -63,7 +62,7 @@ const renderCircles = paintAll(animationStaggered([
 			}),
 			y: new ConstantAnimation(90),
 		}),
-		radius: animationSequence([
+		radius: new SequenceAnimation([
 			tweenNumber({
 				from: 20,
 				to: 40,
@@ -78,24 +77,21 @@ const renderCircles = paintAll(animationStaggered([
 			}),
 		]),
 		fillStyle: new ConstantAnimation("red"),
+	}).derive(createCirclePainter),
+	tweenPoint({
+		from: { x: 20, y: 160 },
+		to: { x: 280, y: 160 },
+		duration: new Duration(60),
+		easing: easings.easeInOut,
+	}).derive((center) => createCirclePainter({
+		center,
+		radius: 20,
+		fillStyle: "green",
 	})),
-	createCirclePainter(
-		tweenPoint({
-			from: { x: 20, y: 160 },
-			to: { x: 280, y: 160 },
-			duration: new Duration(60),
-			easing: easings.easeInOut,
-		})
-			.derive((center) => ({
-				center,
-				radius: 20,
-				fillStyle: "green",
-			})),
-	),
 ]))
 	.extend({ before: new Duration(60), after: new Duration(60) });
 
-const renderRectAndCircle = animationSequence([
+const renderRectAndCircle = new SequenceAnimation([
 	renderRect,
 	renderCircles,
 	new ConstantAnimation(noop, new Duration(30)),
@@ -112,5 +108,5 @@ const renderFrameNumber = createTextAnimation(fromAnimationProperties({
 }));
 
 export const renderScene = paintAll(
-	fromAnimationArray([renderRectAndCircle, renderFrameNumber]),
+	new ArrayAnimation([renderRectAndCircle, renderFrameNumber]),
 );

@@ -1,13 +1,14 @@
 import {
 	Animation,
 	AnimationSettings,
-	animationStaggered,
+	ArrayAnimation,
 	Duration,
-	fromAnimationArray,
 	fromAnimationProperties,
 	paintAll,
 	Painter,
+	StaggeredAnimation,
 } from "./lib/core.ts";
+import { easings } from "./lib/easings.ts";
 import {
 	animateTextSlice,
 	createTextPainter,
@@ -40,14 +41,14 @@ function createTextFloatUpAnimation(
 	animSettings: AnimationSettings,
 ): Animation<TextSettings> {
 	return fromAnimationProperties({
-		y: tweenNumber({ from: fromY, to: toY, ...animSettings }),
+		y: tweenNumber({ from: fromY, to: toY, easing: easings.easeOutBack, ...animSettings }),
 		opacity: tweenNumber({ from: 0, to: 1, ...animSettings }),
 	})
 		.derive(
 			({ y, opacity }) => ({
 				...settingsBase,
 				position: { x, y },
-				fillStyle: `rgba(0, 0, 0, ${opacity})`,
+				fillStyle: `rgba(255, 0, 0, ${opacity})`,
 			}),
 		);
 }
@@ -76,18 +77,18 @@ function createPerWordFloatUpAnimations(
 export function createTextSceneRenderer(
 	context: CanvasRenderingContext2D,
 ): Animation<Painter> {
-	return paintAll(fromAnimationArray([
+	return paintAll(new ArrayAnimation([
 		animateTextSlice("Hello, world!", { duration: new Duration(240) })
 			.derive(
 				(text) => ({
 					text,
 					position: { x: 20, y: 20 },
-					fillStyle: "black",
+					fillStyle: "white",
 				}),
 			)
 			.derive(createTextPainter),
 		paintAll(
-			animationStaggered(
+			new StaggeredAnimation(
 				createPerWordFloatUpAnimations(
 					["This ", "is ", "a ", "test."],
 					context,
