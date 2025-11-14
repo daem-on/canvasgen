@@ -336,3 +336,19 @@ export function surroundWithEmpty(
 export const noopPainterAnim: Animation<Painter> = new ConstantAnimation(
 	noopPainter,
 );
+
+export function normalizeNumber(
+	rangeStart: number,
+	rangeEnd: number,
+	value: number,
+): number {
+	return (value - rangeStart) / (rangeEnd - rangeStart);
+}
+
+export function clampNumber(
+	min: number,
+	max: number,
+	value: number,
+): number {
+	return Math.min(Math.max(value, min), max);
+}
