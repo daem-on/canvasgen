@@ -1,6 +1,6 @@
 import { Canvas } from "npm:@napi-rs/canvas";
-import { Duration } from "../src/lib/core.ts";
-import { createTextSceneRenderer } from "../src/text-scene.ts";
+import { Duration } from "../../lib/core.ts";
+import { createTextSceneRenderer } from "../text-scene.ts";
 
 const canvas = new Canvas(300, 300);
 const canvasContext = canvas.getContext("2d") as unknown as CanvasRenderingContext2D;

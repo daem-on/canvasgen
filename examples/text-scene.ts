@@ -7,14 +7,14 @@ import {
 	paintAll,
 	Painter,
 	StaggeredAnimation,
-} from "./lib/core.ts";
-import { easings } from "./lib/easings.ts";
+} from "../lib/core.ts";
+import { easings } from "../lib/easings.ts";
 import {
 	animateTextSlice,
 	createTextPainter,
 	TextSettings,
 	tweenNumber,
-} from "./lib/std.ts";
+} from "../lib/std.ts";
 
 function getWordWidths(
 	words: string[],

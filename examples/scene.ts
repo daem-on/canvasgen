@@ -8,14 +8,14 @@ import {
 	Painter,
 	SequenceAnimation,
 	StaggeredAnimation,
-} from "./lib/core.ts";
-import { easings } from "./lib/easings.ts";
+} from "../lib/core.ts";
+import { easings } from "../lib/easings.ts";
 import {
 	createCirclePainter,
 	createRectPainter,
 	tweenNumber,
 	tweenPoint,
-} from "./lib/std.ts";
+} from "../lib/std.ts";
 
 const noop: Painter = () => { };
 

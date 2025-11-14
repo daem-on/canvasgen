@@ -16,7 +16,7 @@
 	},
 	"tasks": {
 		"render": {
-			"command": "deno --allow-env --allow-ffi --allow-read --allow-sys --allow-run server/main.ts"
+			"command": "deno --allow-env --allow-ffi --allow-read --allow-sys --allow-run examples/server/main.ts"
 		}
 	}
 }

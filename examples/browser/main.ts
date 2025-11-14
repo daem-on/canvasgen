@@ -1,5 +1,5 @@
-import { Duration } from "../src/lib/core.ts";
-import { createTextSceneRenderer } from "../src/text-scene.ts";
+import { Duration } from "../../lib/core.ts";
+import { createTextSceneRenderer } from "../text-scene.ts";
 import "./style.css";
 
 document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
