@@ -35,7 +35,7 @@ rangeInput.addEventListener("input", () => renderCurrentTime());
 rangeInput.value = "0";
 
 if (import.meta.hot) {
-	import.meta.hot.accept("../src/text-scene.ts", (newModule) => {
+	import.meta.hot.accept("../text-scene.ts", (newModule) => {
 		if (newModule) {
 			renderTextScene = newModule.createTextSceneRenderer(canvasContext);
 			rangeInput.max = renderTextScene.duration.frame.toString();
